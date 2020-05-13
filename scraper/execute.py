@@ -13,32 +13,18 @@ import telegram
 import traceback
 # import your token and target id for the telegram bot
 
-try:
-    telegram_target = os.environ['telegram_target']
-except:
-    raise Warning("Variable 'telegram_token' not found in environment variables.")
 
-
-def setup_bot(token=None):
+def setup_bot(token):
     if token is None:
-        try:
-            token = os.environ['telegram_token']
-            return telegram.Bot(token=token)
-        except KeyError:
-            raise Exception("Telegram bot not set up. Set variable 'telegram_token' in environment variables or "
-                            "provide it as argument.")
+        return None
     else:
         return telegram.Bot(token=token)
 
 
 def send_msg(bot, message, target=None):
     if target is None:
-        try:
-            target = os.environ['telegram_target']
-            bot.send_message(target, message)
-        except KeyError:
-            raise Exception("No target for Telegram message provided. Set variable 'telegram_target' in environment "
-                            "variables or provide it as argument.")
+        raise Warning("No target for Telegram message provided. Set variable 'telegram_target' and 'telegram_token' in "
+                      "environment variables or provide it as argument in order to receive updates via Telegram.")
     else:
         bot.send_message(target, message)
 
@@ -167,15 +153,22 @@ def main(argv):
     run_time = getattr(args, 'amount') * run_unit_multiplicators[getattr(args, 'unit')]
     end_time = start_time_s + run_time
     boards = [board.strip(' ') for board in getattr(args, 'boards').split(",")]
-    if getattr(args, 'proxies') == 'True':
-        import proxies
-        proxy_config = proxies.proxies
+    if getattr(args, 'proxies') == 'True' and 'proxy_list' in os.environ.keys():
+        proxy_config = os.environ['proxy_list']
     else:
+        try:
+            import proxies
+            proxy_config = proxies.proxies
+        except ModuleNotFoundError:
+            raise Exception("Please provide proxy information in a file named 'proxies.py' as a list (proxies) or set"
+                            " a environment variable namend 'proxy_list'.")
         proxy_config = None
     if getattr(args, 'real_ip') == 'True':
         real_ip = True
     else:
         real_ip = False
+    if proxy_config is None and not real_ip:
+        raise Exception("Please provide either a proxy list or allow the use of the real ip.")
     scrape = Scrape4chan(getattr(args, 'type'), boards, start_time_s, end_time, path, Stats, MetaStats,
                          telegram_bot=tel_bot, telegram_target=telegram_target, proxies=proxy_config,
                          use_real_ip=real_ip)
@@ -188,6 +181,16 @@ def main(argv):
         logging.exception("Couldn't info message via bot. Appending to log.", exc_info=True)
     scrape.collect()
 
+try:
+    telegram_target = os.environ['telegram_target']
+except KeyError:
+    telegram_target = None
+    raise Warning("Variable 'telegram_target' not found in environment variables. Updates via Telegram won't work.")
+try:
+    telegram_token = os.environ['telegram_token']
+except KeyError:
+    telegram_token = None
+    raise Warning("Variable 'telegram_token' not found in environment variables. Updates via Telegram won't work.")
 
 tel_bot = setup_bot()
 
@@ -196,6 +199,6 @@ try:
         main(sys.argv)
 except Exception as e:
     logging.exception(f"Main execution failed.", exc_info=True)
-    if tel_bot in locals() and 'telegram_target' in os.environ.keys():
+    if not tel_bot is None and not telegram_target is None:
         send_msg(tel_bot, f"A exception occurred at {time.strftime('%a %d.%m.%Y %H:%M:%S')}. Exception message: /n {e}."
                  f" Traceback: {traceback.format_exc()}")

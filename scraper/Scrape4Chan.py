@@ -386,19 +386,21 @@ class Scrape4chan:
             if time.time() - last_message > 86400:
                 if meta:
                     td = datetime.timedelta(seconds=self.Meta.end_time - time.time())
-                    try:
-                        self.send_msg(f"Collection contains {meta.no_threads} threads after {meta.iterations} "
-                                      f"iterations. Collecting last in {td.days} days, {td.seconds // 3600} hours and "
-                                      f"{(td.seconds // 60) % 60} minutes.")
-                        logging.info(f"Collection contains {meta.no_threads} threads after {meta.iterations} "
-                                     f"iterations. Collecting last in {td.days} days, {td.seconds // 3600} hours and "
-                                     f"{(td.seconds // 60) % 60} minutes.")
-                    except:
-                        logging.exception("Couldn't info message via bot. Appending to log.", exc_info=True)
+                    if self.target is not None and self.bot is not None:
+                        try:
+                            self.send_msg(f"Collection contains {meta.no_threads} threads after {meta.iterations} "
+                                          f"iterations. Collecting last in {td.days} days, {td.seconds // 3600} hours and "
+                                          f"{(td.seconds // 60) % 60} minutes.")
+                            logging.info(f"Collection contains {meta.no_threads} threads after {meta.iterations} "
+                                         f"iterations. Collecting last in {td.days} days, {td.seconds // 3600} hours and "
+                                         f"{(td.seconds // 60) % 60} minutes.")
+                        except:
+                            logging.exception("Couldn't info message via bot. Appending to log.", exc_info=True)
                 last_message = time.time()
         meta = self.Meta.get_or_none(self.Meta.id == 1)
         logging.info(f"Collection finished after {meta.iterations} iterations.")
-        try:
-            self.send_msg(f"Collection finished after {meta.iterations} iterations.")
-        except:
-            logging.exception("Couldn't info message via bot. Appending to log.", exc_info=True)
+        if self.target is not None and self.bot is not None:
+            try:
+                self.send_msg(f"Collection finished after {meta.iterations} iterations.")
+            except:
+                logging.exception("Couldn't info message via bot. Appending to log.", exc_info=True)
