@@ -11,6 +11,7 @@ import argparse
 from copy import deepcopy
 import telegram
 import traceback
+import ast
 # import your token and target id for the telegram bot
 
 
@@ -153,16 +154,14 @@ def main(argv):
     run_time = getattr(args, 'amount') * run_unit_multiplicators[getattr(args, 'unit')]
     end_time = start_time_s + run_time
     boards = [board.strip(' ') for board in getattr(args, 'boards').split(",")]
-    if getattr(args, 'proxies') == 'True' and 'proxy_list' in os.environ.keys():
-        proxy_config = os.environ['proxy_list']
-    else:
+    if getattr(args, 'proxies') == 'True':
         try:
             import proxies
             proxy_config = proxies.proxies
-        except ModuleNotFoundError:
+        except:
+            proxy_config = None
             raise Exception("Please provide proxy information in a file named 'proxies.py' as a list (proxies) or set"
                             " a environment variable namend 'proxy_list'.")
-        proxy_config = None
     if getattr(args, 'real_ip') == 'True':
         real_ip = True
     else:
@@ -182,23 +181,22 @@ def main(argv):
     scrape.collect()
 
 try:
-    telegram_target = int(os.environ['telegram_target'])
+    import telegram_config
+    telegram_target = telegram_config.target
+    telegram_token = telegram_config.token
 except KeyError:
     telegram_target = None
-    raise Warning("Variable 'telegram_target' not found in environment variables. Updates via Telegram won't work.")
-try:
-    telegram_token = os.environ['telegram_token']
-except KeyError:
     telegram_token = None
-    raise Warning("Variable 'telegram_token' not found in environment variables. Updates via Telegram won't work.")
+    raise Warning("Importing Telegram config failed. Updates via Telegram won't work.")
 
-tel_bot = setup_bot()
+
+tel_bot = setup_bot(telegram_token)
 
 try:
     if __name__ == '__main__':
         main(sys.argv)
 except Exception as e:
     logging.exception(f"Main execution failed.", exc_info=True)
-    if not tel_bot is None and not telegram_target is None:
+    if tel_bot is not None and telegram_target is not None:
         send_msg(tel_bot, f"A exception occurred at {time.strftime('%a %d.%m.%Y %H:%M:%S')}. Exception message: /n {e}."
                  f" Traceback: {traceback.format_exc()}")

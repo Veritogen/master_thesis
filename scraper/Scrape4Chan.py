@@ -286,11 +286,9 @@ class Scrape4chan:
         """
         try:
             thread_file = self.get_link(f'https://a.4cdn.org/{board}/thread/{thread_id}.json')
-            # todo: add get of html here 1. if board in self.boards_with_id: html_file = self.get_link(f...)
-            #  2. feed to bs4, 3. extract ids into dict [post_id] = poster_no 4. iterate over posts in json and add id from dict
             if board in self.boards_with_id:
                 thread_html = self.get_link(f"https://boards.4chan.org/{board}/thread/{thread_id}")
-                self.save_txt(board, thread_id, thread_html.content)
+                self.save_txt(board, thread_id, str(thread_html.content))
             if self.check_integrity(thread_file.json()['posts']):
                 self.save_json(board, thread_id, thread_file.json())
                 self.update_collected_thread(thread_id)
@@ -330,7 +328,7 @@ class Scrape4chan:
         Function to save the txt files.
         :param board: Name of the board. Will be used to select folder.
         :param thread_id: Id of the thread to be saved. Will be used in the file name.
-        :param json_file: File to save to disk.
+        :param text: String to save to disk.
         """
         with open(f'{self.path}{board}/{thread_id}.txt', 'w') as outfile:
             outfile.write(text)
@@ -403,11 +401,11 @@ class Scrape4chan:
                     if self.target is not None and self.bot is not None:
                         try:
                             self.send_msg(f"Collection contains {meta.no_threads} threads after {meta.iterations} "
-                                          f"iterations. Collecting last in {td.days} days, {td.seconds // 3600} hours and "
-                                          f"{(td.seconds // 60) % 60} minutes.")
+                                          f"iterations. Collecting last in {td.days} days, {td.seconds // 3600} hours "
+                                          f"and {(td.seconds // 60) % 60} minutes.")
                             logging.info(f"Collection contains {meta.no_threads} threads after {meta.iterations} "
-                                         f"iterations. Collecting last in {td.days} days, {td.seconds // 3600} hours and "
-                                         f"{(td.seconds // 60) % 60} minutes.")
+                                         f"iterations. Collecting last in {td.days} days, {td.seconds // 3600} hours "
+                                         f"and {(td.seconds // 60) % 60} minutes.")
                         except:
                             logging.exception("Couldn't info message via bot. Appending to log.", exc_info=True)
                 last_message = time.time()
