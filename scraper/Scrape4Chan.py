@@ -288,6 +288,9 @@ class Scrape4chan:
             thread_file = self.get_link(f'https://a.4cdn.org/{board}/thread/{thread_id}.json')
             # todo: add get of html here 1. if board in self.boards_with_id: html_file = self.get_link(f...)
             #  2. feed to bs4, 3. extract ids into dict [post_id] = poster_no 4. iterate over posts in json and add id from dict
+            if board in self.boards_with_id:
+                thread_html = self.get_link(f"https://boards.4chan.org/{board}/thread/{thread_id}")
+                self.save_txt(board, thread_id, thread_html.content)
             if self.check_integrity(thread_file.json()['posts']):
                 self.save_json(board, thread_id, thread_file.json())
                 self.update_collected_thread(thread_id)
@@ -320,7 +323,18 @@ class Scrape4chan:
         """
         with open(f'{self.path}{board}/{thread_id}.json', 'w') as outfile:
             json.dump(json_file, outfile)
-            logging.debug(f"Json of thread no {thread_id} saved successfully to disk.")
+            logging.debug(f"Json of thread no {thread_id} in board {board} saved successfully to disk.")
+
+    def save_txt(self, board, thread_id, text):
+        """
+        Function to save the txt files.
+        :param board: Name of the board. Will be used to select folder.
+        :param thread_id: Id of the thread to be saved. Will be used in the file name.
+        :param json_file: File to save to disk.
+        """
+        with open(f'{self.path}{board}/{thread_id}.txt', 'w') as outfile:
+            outfile.write(text)
+            logging.debug(f"Text of thread no {thread_id} in board {board} saved successfully to disk.")
 
     def update_meta(self):
         """
