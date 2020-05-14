@@ -182,7 +182,7 @@ def main(argv):
     scrape.collect()
 
 try:
-    telegram_target = os.environ['telegram_target']
+    telegram_target = int(os.environ['telegram_target'])
 except KeyError:
     telegram_target = None
     raise Warning("Variable 'telegram_target' not found in environment variables. Updates via Telegram won't work.")
