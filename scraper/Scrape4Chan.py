@@ -84,6 +84,10 @@ class Scrape4chan:
             self.end_time = end_time
             for board in self.boards:
                 os.makedirs(f"{self.path}{board}/", exist_ok=True)
+            self.Meta.create(id=1, no_threads=self.Stats.select().count(), iterations=0, start_time=self.start_time,
+                             end_time=self.end_time, collection_end=int(time.time()),
+                             collection_type=self.collection_type)
+            logging.debug('Meta stats created')
         logging.info(f'Scrape4Chan set up to scrape boards {self.boards} for {self.end_time - self.start_time}, '
                      f'saving to {self.path}.')
 
@@ -345,11 +349,6 @@ class Scrape4chan:
             meta.collection_end = time.time()
             meta.save()
             logging.debug('Meta stats updated')
-        else:
-            self.Meta.create(id=1, no_threads=self.Stats.select().count(), iterations=1, start_time=self.start_time,
-                             end_time=self.end_time, collection_end=int(time.time()),
-                             collection_type=self.collection_type)
-            logging.debug('Meta stats created')
 
     def archive_threads(self):
         archive_list = []
@@ -397,7 +396,7 @@ class Scrape4chan:
             meta = self.Meta.get_or_none(self.Meta.id == 1)
             if time.time() - last_message > 86400:
                 if meta:
-                    td = datetime.timedelta(seconds=self.Meta.end_time - time.time())
+                    td = datetime.timedelta(seconds=self.end_time - time.time())
                     if self.target is not None and self.bot is not None:
                         try:
                             self.send_msg(f"Collection contains {meta.no_threads} threads after {meta.iterations} "
