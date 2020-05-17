@@ -382,6 +382,7 @@ class Scrape4chan:
     def collect(self):
         if time.time() < self.start_time:
             time.sleep(self.start_time - time.time())
+        self.send_msg(f"Collection of threads started.")
         last_message = time.time()
         while not self.is_finished():
             try:

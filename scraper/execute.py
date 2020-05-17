@@ -172,10 +172,11 @@ def main(argv):
                          telegram_bot=tel_bot, telegram_target=telegram_target, proxies=proxy_config,
                          use_real_ip=real_ip)
     try:
-        send_msg(tel_bot, f"Scraper started. Collection name: {getattr(args,'name')}, for board(s) {', '.join(boards)}"
-                          f" for {getattr(args, 'amount')} {getattr(args, 'unit')} using path {path}")
-        logging.info(f"Scraper started. Collectigit on name: {getattr(args,'name')}, for board(s) {', '.join(boards)} for"
-                     f" {getattr(args, 'amount')} {getattr(args, 'unit')} using path {path}")
+        send_msg(tel_bot, f"Scraper initialized. Collection name: {getattr(args,'name')}, for board(s) "
+                          f"{', '.join(boards)} for {getattr(args, 'amount')} {getattr(args, 'unit')} using path {path}"
+                 )
+        logging.info(f"Scraper initialized. Collection name: {getattr(args,'name')}, for board(s) {', '.join(boards)} "
+                     f"for {getattr(args, 'amount')} {getattr(args, 'unit')} using path {path}")
     except:
         logging.exception("Couldn't info message via bot. Appending to log.", exc_info=True)
     scrape.collect()
