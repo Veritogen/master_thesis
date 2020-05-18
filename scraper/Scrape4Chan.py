@@ -187,7 +187,7 @@ class Scrape4chan:
                     logging.exception(f"Couldn't retrieve archive list for board {board}.", exc_info=True)
                     continue
                 self.thread_dict[board] = set(threads_json.json())
-                for thread_id in reversed((threads_json.json())):
+                for thread_id in (threads_json.json()):
                     db_entry = self.Stats.get_or_none((self.Stats.thread_id == thread_id) & (self.Stats.board == board))
                     if not db_entry:
                         self.Stats.create(thread_id=thread_id, board=board, last_modified=0, seen=1, collected=0,
