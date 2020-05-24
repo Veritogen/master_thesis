@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup as bs
 import networkx as nx
 import warnings
 import logging
+from langdetect import detect
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 #todo: setup logger
 
@@ -64,6 +65,7 @@ class Extractor:
                             try:
                                 if key in post.keys():
                                     full_string, quoted_list, quote_string, own_text = self.strip_text(post[key])
+                                # if no comment is written, add emtpy string
                                 else:
                                     full_string, quoted_list, quote_string, own_text = self.strip_text("")
                                     #todo: log missing text
@@ -99,10 +101,10 @@ class Extractor:
         self.post_df[['resto', 'time', 'thread_id']] = self.post_df[['resto', 'time', 'thread_id']].astype(int)
         self.post_df.index = self.post_df.no
         self.post_df = self.post_df.drop(columns='no')
+        self.detect_lang()
 
     def strip_text(self, text):
-        # TODO: how to handle non-digit quotes like e.g. '/pol/'? => Chris fragen
-        # TODO: how to handle dead links?  classdeadlinkgtgt793993759span => Chris fragen
+        #todo: handle dead link class
         soup = bs(text, 'html.parser')
         full_string = ''
         quoted_list = []
@@ -113,7 +115,6 @@ class Extractor:
                 quote_ids = soup.find_all(class_='quotelink')
                 for quote_id in quote_ids:
                     full_string = full_string + quote_id.contents[0]
-                    # TODO: add check for length of quoted thread/post id to check if real thread/post
                     if quote_id.contents[0].strip('>>').isdigit():
                         quoted_list.append(int(quote_id.contents[0].strip('>>')))
             elif str(item).startswith('<span class="quote">'):
@@ -148,7 +149,6 @@ class Extractor:
         return graph
 
     def save_gexf(self, thread_id=None):
-        os.makedirs(f"{self.path}/gexfs/", exist_ok=True)
         if thread_id in list(self.stat_df.index):
             nx.write_gexf(self.generate_network(thread_id), f"{self.path}/gexfs/{thread_id}.gexf")
         else:
@@ -168,17 +168,29 @@ class Extractor:
         return edge_list
 
     def create_gexfs(self, min_replies=275, max_replies=325):
+        os.makedirs(f"{self.path}/gexfs/", exist_ok=True)
         thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) & (self.stat_df['replies'] <= max_replies)]\
             .index
         for thread_id in tqdm(thread_list):
             self.save_gexf(thread_id)
         #todo create gexf (b-mode or id-mode)
 
-    def return_document_list(self, text_column="own_text", min_replies=275, max_replies=325):
+    def return_document_list(self, text_column="own_text", min_replies=275, max_replies=325, language='en'):
         if not isinstance(self.post_df, pd.DataFrame) or not isinstance(self.stat_df, pd.DataFrame):
             self.create_dfs()
         text_list = []
-        for thread_id in tqdm(self.stat_df[(self.stat_df['replies'] >= min_replies) & (self.stat_df['replies'] <=
-                                                                                       max_replies)].index):
+        for thread_id in tqdm(self.stat_df[(self.stat_df['replies'] >= min_replies) &
+                                           (self.stat_df['replies'] <= max_replies) &
+                                           (self.stat_df['language'] == language)].index, desc="Assembling text list."):
             text_list.append(" ".join(self.post_df[text_column][self.post_df.thread_id == thread_id].tolist()))
         return text_list
+
+    def detect_lang(self):
+        languages = []
+        for thread_id in tqdm(self.stat_df.index, desc='Detecting languages: '):
+            try:
+                languages.append(detect(" ".join(self.post_df['full_string']
+                                                 [self.post_df.thread_id == thread_id].tolist())))
+            except:
+                languages.append(None)
+        self.stat_df['language'] = languages
