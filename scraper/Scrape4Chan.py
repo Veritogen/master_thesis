@@ -137,6 +137,7 @@ class Scrape4chan:
         raise Exception(f"Couldn't retrieve link {link} after 5 retries. Aborting.")
 
     def setup_queue(self):
+        # todo: check why new threads are added after the collection cycle is finished
         """
         Function to get a dictionary of thread. Will also set up some stuff needed later
         (for statistical reasons mainly).
