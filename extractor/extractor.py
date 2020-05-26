@@ -35,6 +35,9 @@ class Extractor:
                           'country_name', 'troll_country']
         self.stat_df = None
         self.post_df = None
+        self.board = None
+        self.thread_id = None
+        self.json_file = None
 
     def create_file_dict(self):
         self.file_dict = defaultdict(list)
@@ -68,21 +71,26 @@ class Extractor:
                         if key == 'com':
                             try:
                                 if key in post.keys():
-                                    full_string, quoted_list, quote_string, own_text = self.strip_text(post[key])
+                                    full_string, quoted_list, quote_string, own_text, dead_links = \
+                                        self.strip_text(post[key])
                                 # if no comment is written, add emtpy string
                                 else:
-                                    full_string, quoted_list, quote_string, own_text = self.strip_text("")
+                                    full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text("")
                                     #todo: log missing text
                                 post_dict['full_string'] = full_string
                                 post_dict['quoted_list'] = quoted_list
                                 post_dict['quote_string'] = quote_string
                                 post_dict['own_text'] = own_text
+                                post_dict['dead_links'] = dead_links
                             except:
                                 print(f"board: {board}, Thread: {thread_id}, Post: {post['no']}"
                                       f" Post keys: {post.keys()}, Full Post: {post}")
                                 #todo: add board and Id to log
                                 #logging.ex(post, post_dict)
                     self.post_list.append(post_dict)
+
+    def extract_json(self):
+        pass
 
     def save_json(self):
         if not self.stat_dict or not self.post_list:
@@ -114,6 +122,7 @@ class Extractor:
         quoted_list = []
         quote_string = ''
         own_text = ''
+        dead_link_list = []
         for item in soup.contents:
             if str(item).startswith('<a class="quotelink"'):
                 quote_ids = soup.find_all(class_='quotelink')
@@ -129,11 +138,16 @@ class Extractor:
             elif str(item).startswith('<br/>'):
                 full_string = full_string + ' \n '
             elif str(item).startswith('<span class="deadlink'):
-                print(str(item))
+                dead_links = soup.find_all(class_='deadlink')
+                for dead_link in dead_links:
+                    if dead_link.contents[0].strip('>>').isdigit():
+                        dead_link_list.append(int(dead_link.contents[0].strip('>>')))
+                    else:
+                        dead_link_list.append(dead_link.contents[0])
             else:
                 full_string = full_string + str(item)
                 own_text = own_text + ' ' + (str(item))
-        return full_string, quoted_list, quote_string, own_text
+        return full_string, quoted_list, quote_string, own_text, dead_link_list
 
     def generate_network(self, thread_id):
         # initialize graph
