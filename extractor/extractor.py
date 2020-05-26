@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 
 
 class Extractor:
-    def __init__(self, in_path, out_path=None, mode="legacy"):
+    def __init__(self, in_path, out_path=None, mode="legacy", limit=100000):
         self.in_path = in_path
         if out_path is None:
             self.out_path = self.in_path
@@ -38,6 +38,7 @@ class Extractor:
         self.board = None
         self.thread_id = None
         self.json_file = None
+        self.limit = limit
 
     def create_file_dict(self):
         self.file_dict = defaultdict(list)
@@ -50,47 +51,62 @@ class Extractor:
     def extract(self):
         self.stat_dict = {}
         self.post_list = []
-        if not self.file_dict:
-            self.create_file_dict()
-        for board in tqdm(self.file_dict.keys(), desc='Board'):
-            for thread_file in tqdm(self.file_dict[board], desc='Threads'):
-                json_file = json.load(open(f"{self.in_path}/{board}/{thread_file}"))
-                thread_id = int(thread_file.split('.')[0])
-                for post in json_file['posts']:
-                    if post['no'] == thread_id:
-                        self.stat_dict[post['no']] = {'board': board}
-                        for rel_stat in self.relevant_stats:
-                            self.stat_dict[post['no']][rel_stat] = post[rel_stat]
-                    post_dict = {'thread_id': thread_id,
-                                 'board': board}
-                    for key in self.post_keys:
-                        if key in post.keys():
-                            post_dict[key] = post[key]
-                        else:
-                            post_dict[key] = None
-                        if key == 'com':
-                            try:
-                                if key in post.keys():
-                                    full_string, quoted_list, quote_string, own_text, dead_links = \
-                                        self.strip_text(post[key])
-                                # if no comment is written, add emtpy string
-                                else:
-                                    full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text("")
-                                    #todo: log missing text
-                                post_dict['full_string'] = full_string
-                                post_dict['quoted_list'] = quoted_list
-                                post_dict['quote_string'] = quote_string
-                                post_dict['own_text'] = own_text
-                                post_dict['dead_links'] = dead_links
-                            except:
-                                print(f"board: {board}, Thread: {thread_id}, Post: {post['no']}"
-                                      f" Post keys: {post.keys()}, Full Post: {post}")
-                                #todo: add board and Id to log
-                                #logging.ex(post, post_dict)
-                    self.post_list.append(post_dict)
+        if self.mode == 'legacy':
+            if not self.file_dict:
+                self.create_file_dict()
+            for board in tqdm(self.file_dict.keys(), desc='Board'):
+                self.board = board
+                for thread_file in tqdm(self.file_dict[board], desc='Threads'):
+                    self.json_file = json.load(open(f"{self.in_path}/{board}/{thread_file}"))
+                    self.thread_id = int(thread_file.split('.')[0])
+                    self.extract_json()
+
+        elif self.mode == 'pol_set':
+            self.board = 'pol'
+            i = 0
+            with open(f"{self.in_path}pol_062016-112019_labeled.ndjson") as f:
+                for line in f:
+                    if i > self.limit:
+                        break
+                    else:
+                        self.json_file = json.loads(line)
+                        self.thread_id = self.json_file['posts'][0]['no']
+                        self.extract_json()
+                    i += 1
 
     def extract_json(self):
-        pass
+        for post in self.json_file['posts']:
+            if post['no'] == self.thread_id:
+                self.stat_dict[post['no']] = {'board': self.board}
+                for rel_stat in self.relevant_stats:
+                    self.stat_dict[post['no']][rel_stat] = post[rel_stat]
+            post_dict = {'thread_id': self.thread_id,
+                         'board': self.board}
+            for key in self.post_keys:
+                if key in post.keys():
+                    post_dict[key] = post[key]
+                else:
+                    post_dict[key] = None
+                if key == 'com':
+                    try:
+                        if key in post.keys():
+                            full_string, quoted_list, quote_string, own_text, dead_links = \
+                                self.strip_text(post[key])
+                        # if no comment is written, add emtpy string
+                        else:
+                            full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text("")
+                            # todo: log missing text
+                        post_dict['full_string'] = full_string
+                        post_dict['quoted_list'] = quoted_list
+                        post_dict['quote_string'] = quote_string
+                        post_dict['own_text'] = own_text
+                        post_dict['dead_links'] = dead_links
+                    except:
+                        print(f"board: {self.board}, Thread: {self.thread_id}, Post: {post['no']}"
+                              f" Post keys: {post.keys()}, Full Post: {post}")
+                        # todo: add board and Id to log
+                        # logging.ex(post, post_dict)
+            self.post_list.append(post_dict)
 
     def save_json(self):
         if not self.stat_dict or not self.post_list:
