@@ -67,6 +67,7 @@ class NlPipe:
         self.evaluation_output = None
         self.result_df = None
         self.word_topic_df = None
+        self.word_topic_intersection = None
         self.allowed_languages = allowed_languages
         self.language_detection = language_detection
 
@@ -189,8 +190,31 @@ class NlPipe:
         for topic_weights in self.lda_model.components_:
             top_keyword_locations = (-topic_weights).argsort()[:no_words]
             topic_keywords.append(keywords.take(top_keyword_locations))
-        self.word_topic_df = pd.DataFrame(topic_keywords)
+        self.word_topic_df = pd.DataFrame(topic_keywords, columns=[f"word_{x}" for x in range(no_words)])
 
     def evaluate_pyldavis(self):
         panel = pyLDAvis.sklearn.prepare(self.lda_model, self.bag_of_words, self.vectorizer)
         pyLDAvis.show(panel)
+
+    def get_word_topic_intersection(self, no_words=30):
+        if not isinstance(self.word_topic_df, pd.DataFrame):
+            self.evaluate_model(no_words=no_words)
+        elif isinstance(self.word_topic_df, pd.DataFrame) and self.word_topic_df.shape[1] != no_words:
+            self.evaluate_model(no_words=no_words)
+        intersection_list = []
+        for x in range(10):
+            temp_list = []
+            for y in range(10):
+                if x != y:
+                    temp_list.append(len(set(self.word_topic_df[self.word_topic_df.index == x].values[0]).intersection(
+                        self.word_topic_df[self.word_topic_df.index == y].values[0]))/no_words)
+                else:
+                    temp_list.append(1)
+            intersection_list.append(temp_list)
+        self.word_topic_intersection = pd.DataFrame(intersection_list)
+
+    def get_topic_coherence_scores(self):
+        # todo: sum of distance between words in topic derived from word embedding
+        # todo: sum of sum of distances divided by no topics
+        pass
+
