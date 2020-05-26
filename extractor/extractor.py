@@ -11,9 +11,13 @@ from langdetect import detect
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 #todo: setup logger
 
+
 class Extractor:
-    def __init__(self, path):
-        self.path = path
+    def __init__(self, in_path, out_path=None, mode="legacy"):
+        self.in_path = in_path
+        if out_path is None:
+            self.out_path = self.in_path
+        self.mode = mode
         self.file_dict = None
         self.stat_dict = None
         self.post_list = None
@@ -34,9 +38,9 @@ class Extractor:
 
     def create_file_dict(self):
         self.file_dict = defaultdict(list)
-        for item in os.listdir(self.path):
-            if not os.path.isfile(f"{self.path}/{item}"):
-                for file in os.listdir(f"{self.path}/{item}"):
+        for item in os.listdir(self.in_path):
+            if not os.path.isfile(f"{self.in_path}/{item}"):
+                for file in os.listdir(f"{self.in_path}/{item}"):
                     if file.endswith(".json"):
                         self.file_dict[item].append(file)
 
@@ -47,7 +51,7 @@ class Extractor:
             self.create_file_dict()
         for board in tqdm(self.file_dict.keys(), desc='Board'):
             for thread_file in tqdm(self.file_dict[board], desc='Threads'):
-                json_file = json.load(open(f"{self.path}/{board}/{thread_file}"))
+                json_file = json.load(open(f"{self.in_path}/{board}/{thread_file}"))
                 thread_id = int(thread_file.split('.')[0])
                 for post in json_file['posts']:
                     if post['no'] == thread_id:
@@ -83,9 +87,9 @@ class Extractor:
     def save_json(self):
         if not self.stat_dict or not self.post_list:
             self.extract()
-        with open(f"{self.path}/stats.json", "w") as outfile:
+        with open(f"{self.out_path}/stats.json", "w") as outfile:
             json.dump(self.stat_dict, outfile)
-        with open(f"{self.path}/posts.json", "w") as outfile:
+        with open(f"{self.out_path}/posts.json", "w") as outfile:
             json.dump(self.post_list, outfile)
 
     def create_dfs(self):
@@ -124,6 +128,8 @@ class Extractor:
                     quote_string = quote_string + ' ' + str(quote.contents[0])
             elif str(item).startswith('<br/>'):
                 full_string = full_string + ' \n '
+            elif str(item).startswith('<span class="deadlink'):
+                print(str(item))
             else:
                 full_string = full_string + str(item)
                 own_text = own_text + ' ' + (str(item))
@@ -150,7 +156,7 @@ class Extractor:
 
     def save_gexf(self, thread_id=None):
         if thread_id in list(self.stat_df.index):
-            nx.write_gexf(self.generate_network(thread_id), f"{self.path}/gexfs/{thread_id}.gexf")
+            nx.write_gexf(self.generate_network(thread_id), f"{self.out_path}/gexfs/{thread_id}.gexf")
         else:
             print(
                 'Die angegebene Thread ID wurde im Datensatz nicht gefunden. Bitte überprüfe, ob die ID richtig ist.')
@@ -168,7 +174,7 @@ class Extractor:
         return edge_list
 
     def create_gexfs(self, min_replies=275, max_replies=325):
-        os.makedirs(f"{self.path}/gexfs/", exist_ok=True)
+        os.makedirs(f"{self.out_path}/gexfs/", exist_ok=True)
         thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) & (self.stat_df['replies'] <= max_replies)]\
             .index
         for thread_id in tqdm(thread_list):
@@ -194,3 +200,15 @@ class Extractor:
             except:
                 languages.append(None)
         self.stat_df['language'] = languages
+
+    def save_df_pickles(self, path=None):
+        if path is None:
+            path = self.out_path
+        self.stat_df.to_pickle(f"{path}stat_df.pkl")
+        self.post_df.to_pickle(f"{path}post_df.pkl")
+
+    def save_df_csvs(self, path=None):
+        if path is None:
+            path = self.out_path
+        self.stat_df.to_csv(f"{path}stat_df.pkl")
+        self.post_df.to_csv(f"{path}post_df.pkl")
