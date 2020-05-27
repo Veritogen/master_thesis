@@ -17,6 +17,8 @@ class Extractor:
         self.in_path = in_path
         if out_path is None:
             self.out_path = self.in_path
+        else:
+            self.out_path = out_path
         self.mode = mode
         self.file_dict = None
         self.stat_dict = None
@@ -62,10 +64,11 @@ class Extractor:
                     self.extract_json()
 
         elif self.mode == 'pol_set':
+            self.post_keys.append('extracted_poster_id')
             self.board = 'pol'
             i = 0
             with open(f"{self.in_path}pol_062016-112019_labeled.ndjson") as f:
-                for line in f:
+                for line in tqdm(f, desc='Threads'):
                     if i > self.limit:
                         break
                     else:
@@ -79,7 +82,10 @@ class Extractor:
             if post['no'] == self.thread_id:
                 self.stat_dict[post['no']] = {'board': self.board}
                 for rel_stat in self.relevant_stats:
-                    self.stat_dict[post['no']][rel_stat] = post[rel_stat]
+                    try:
+                        self.stat_dict[post['no']][rel_stat] = post[rel_stat]
+                    except KeyError:
+                        self.stat_dict[post['no']][rel_stat] = 'MISSING'
             post_dict = {'thread_id': self.thread_id,
                          'board': self.board}
             for key in self.post_keys:
@@ -203,10 +209,11 @@ class Extractor:
                 edge_list.append([int(index), int(resto)])
         return edge_list
 
-    def create_gexfs(self, min_replies=275, max_replies=325):
+    def create_gexfs(self, min_replies=275, max_replies=325, language='en'):
         os.makedirs(f"{self.out_path}/gexfs/", exist_ok=True)
-        thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) & (self.stat_df['replies'] <= max_replies)]\
-            .index
+        thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) &
+                                   (self.stat_df['replies'] <= max_replies) &
+                                   (self.stat_df['language'] == language)].index
         for thread_id in tqdm(thread_list):
             self.save_gexf(thread_id)
         #todo create gexf (b-mode or id-mode)
