@@ -12,6 +12,10 @@ from collections import Counter, OrderedDict
 import seaborn as sns
 import matplotlib.pyplot as plt
 from langdetect import detect
+from spacy.vocab import Vocab
+from itertools import combinations
+from math import factorial
+from collections import defaultdict
 
 class NlPipe:
     def __init__(self, list_of_docs, document_ids=None, language_model="en_core_web_lg", tagger=False, parser=False,
@@ -68,8 +72,14 @@ class NlPipe:
         self.result_df = None
         self.word_topic_df = None
         self.word_topic_intersection = None
+        self.intersection_score = None
         self.allowed_languages = allowed_languages
         self.language_detection = language_detection
+        self.spacy_vocab = None
+        self.word_distance_dict = None
+        self.word_topic_distance_sum = 0
+        self.unigram_dict = None
+        self.bigram_dict = None
 
     def enable_pipe_component(self, component):
         if component in self.pipe_disable:
@@ -125,7 +135,7 @@ class NlPipe:
         for doc in self.processed_docs:
             joined_docs.append(" ".join(doc))
         self.vectorizer = CountVectorizer(lowercase=False, ngram_range=n_grams, min_df=min_df,
-                                     max_df=max_df)
+                                          max_df=max_df)
         self.bag_of_words = self.vectorizer.fit_transform(joined_docs)
 
     def create_tf_idf(self, n_grams=(1, 1), min_df=0.01, max_df=0.6):
@@ -140,7 +150,8 @@ class NlPipe:
     def create_lda_model(self, no_topics=10, input_type="bag"):
         self.lda_model = LDA(n_jobs=self.processes, n_components=no_topics)
         if input_type == "bag":
-            self.create_bag_of_words()
+            if self.bag_of_words is None:
+                self.create_bag_of_words()
             self.lda_output = self.lda_model.fit_transform(self.bag_of_words)
         else:
             self.create_tf_idf()
@@ -196,25 +207,111 @@ class NlPipe:
         panel = pyLDAvis.sklearn.prepare(self.lda_model, self.bag_of_words, self.vectorizer)
         pyLDAvis.show(panel)
 
-    def get_word_topic_intersection(self, no_words=30):
+    def get_word_topic_intersection(self, no_words=30, no_topics=10):
         if not isinstance(self.word_topic_df, pd.DataFrame):
             self.evaluate_model(no_words=no_words)
         elif isinstance(self.word_topic_df, pd.DataFrame) and self.word_topic_df.shape[1] != no_words:
             self.evaluate_model(no_words=no_words)
         intersection_list = []
-        for x in range(10):
+        intersection_score = 0
+        all_combinations = [combo for combo in combinations(range(no_topics), 2)]
+        for x in range(no_topics):
             temp_list = []
-            for y in range(10):
+            for y in range(no_topics):
                 if x != y:
                     temp_list.append(len(set(self.word_topic_df[self.word_topic_df.index == x].values[0]).intersection(
                         self.word_topic_df[self.word_topic_df.index == y].values[0]))/no_words)
+                if (x, y) in all_combinations:
+                    intersection_score += len(set(self.word_topic_df[self.word_topic_df.index == x].values[0])
+                                              .intersection(self.word_topic_df[self.word_topic_df.index == y]
+                                                            .values[0]))/no_words
                 else:
                     temp_list.append(1)
             intersection_list.append(temp_list)
+        self.intersection_score = intersection_score / len(all_combinations)
         self.word_topic_intersection = pd.DataFrame(intersection_list)
 
-    def get_topic_coherence_scores(self):
+    def get_topic_word_distance_sum(self, no_words=30):
+        self.word_distance_dict = {}
+        if not isinstance(self.word_topic_df, pd.DataFrame):
+            self.evaluate_model(no_words=no_words)
+        elif isinstance(self.word_topic_df, pd.DataFrame) and self.word_topic_df.shape[1] != no_words:
+            self.evaluate_model(no_words=no_words)
+        if self.spacy_vocab is None:
+            self.load_textgain_embs()
+        for index in self.word_topic_df.index:
+            topic_distance_sum = 0
+            missing_count = 0
+            for word_a, word_b in combinations(self.word_topic_df[self.word_topic_df.index == index].values[0], 2):
+                if self.spacy_vocab.has_vector(str(word_a)) and self.spacy_vocab.has_vector(str(word_b)):
+                    topic_distance_sum += np.linalg.norm(self.spacy_vocab.get_vector(str(word_a)) -
+                                                         self.spacy_vocab.get_vector(str(word_b)))
+                else:
+                    missing_count += 1
+            self.word_distance_dict[index] = topic_distance_sum / ((factorial(no_words)/(factorial(2) *
+                                                                                         factorial(no_words-2)))
+                                                                   - missing_count)
+        self.word_topic_distance_sum = sum(self.word_distance_dict.values())/len(self.word_distance_dict.keys())
+
         # todo: sum of distance between words in topic derived from word embedding
         # todo: sum of sum of distances divided by no topics
-        pass
 
+    def load_textgain_embs(self, from_txt=False, path="textgain_embeddings/spacy_vocab"):
+        self.spacy_vocab = Vocab()
+        if from_txt:
+            with open(path) as f:
+                for line in f:
+                    split_line = line.split()
+                    self.spacy_vocab.set_vector("".join(split_line[:-150]),
+                                                np.array([float(coord) for coord in split_line[-150:]]))
+        else:
+            self.spacy_vocab.from_disk(path)
+
+    def calculate_coherence(self, type="cosine"):
+        pass
+        #todo: add coherence function here
+
+    def calculate_jaccard(self):
+        pass
+        #todo: calculate jaccard distance here
+
+    def calculate_cosine(self, word_1, word_2):
+        return np.dot(word_1, word_2)/(np.linalg.norm(word_1)*np.linalg.norm(word_2))
+
+    def calculate_dice(self):
+        pass
+        #todo: calculate dice coefficient here
+
+    def calculate_centroid_sim(self):
+        pass
+        #todo: calculate centroid similarity here
+
+    def calculate_word_probs(self):
+        #todo: calculate unigram  and probability of words
+        self.unigram_dict = defaultdict(int)
+        self.bigram_dict = defaultdict(int)
+        unigram_count = 0
+        bigram_count = 0
+        for doc in tqdm(self.processed_docs, desc="calculation uni- and bigram probabilities: "):
+            for i, word in enumerate(doc):
+                self.unigram_dict[word] += 1
+                unigram_count += 1
+                try:
+                    self.bigram_dict[" ".join([word, doc[i+1]])] += 1
+                    bigram_count += 1
+                except:
+                    pass
+        self.unigram_dict = {k: v/unigram_count for k, v in self.unigram_dict.items()}
+        self.bigram_dict = {k: v/bigram_count for k, v in self.bigram_dict.items()}
+
+    def calculate_pmi(self, word_1, word_2):
+        if self.unigram_dict is None or self.bigram_dict is None:
+            self.calculate_word_probs()
+        return np.log2(self.bigram_dict[" ".join([word_1, word_2])]/(self.unigram_dict[word_1] *
+                                                                     self.unigram_dict[word_2]))
+
+    def calculate_npmi(self, word_1, word_2):
+        return self.calculate_pmi(word_1, word_2)/(-np.log(self.bigram_dict[" ".join([word_1, word_2])]))
+
+    def get_weight_vectors(self, weight=2, type="npmi"):
+        pass
