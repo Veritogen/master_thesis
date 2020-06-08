@@ -13,12 +13,13 @@ warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 
 
 class Extractor:
-    def __init__(self, in_path, out_path=None, mode="legacy", limit=100000):
+    def __init__(self, in_path, out_path=None, mode="legacy", limit=100000, file_name=None):
         self.in_path = in_path
         if out_path is None:
             self.out_path = self.in_path
         else:
             self.out_path = out_path
+        self.file_name = file_name
         self.mode = mode
         self.file_dict = None
         self.stat_dict = None
@@ -41,6 +42,8 @@ class Extractor:
         self.thread_id = None
         self.json_file = None
         self.limit = limit
+        if self.mode == "pol_set" and self.file_name is None:
+            raise Exception("File name of dataset not provided.")
 
     def create_file_dict(self):
         self.file_dict = defaultdict(list)
