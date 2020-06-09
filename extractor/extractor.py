@@ -214,7 +214,7 @@ class Extractor:
         return edge_list
 
     def create_gexfs(self, min_replies=275, max_replies=325, language='en'):
-        os.makedirs(f"{self.out_path}/gexfs/", exist_ok=True)
+        os.makedirs(f"{self.out_path}/gexfs/{min_replies}-{max_replies}/", exist_ok=True)
         thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) &
                                    (self.stat_df['replies'] <= max_replies) &
                                    (self.stat_df['language'] == language)].index
