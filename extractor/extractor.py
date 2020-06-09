@@ -13,12 +13,13 @@ warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 
 
 class Extractor:
-    def __init__(self, in_path, out_path=None, mode="legacy", limit=100000, file_name=None):
+    def __init__(self, in_path, out_path=None, mode="legacy", file_name=None):
         self.in_path = in_path
         if out_path is None:
             self.out_path = self.in_path
         else:
             self.out_path = out_path
+            os.makedirs(f"{self.out_path}", exist_ok=True)
         self.file_name = file_name
         self.mode = mode
         self.file_dict = None
@@ -41,7 +42,6 @@ class Extractor:
         self.board = None
         self.thread_id = None
         self.json_file = None
-        self.limit = limit
         if self.mode == "pol_set" and self.file_name is None:
             raise Exception("File name of dataset not provided.")
 
@@ -70,27 +70,17 @@ class Extractor:
             self.post_keys.append('extracted_poster_id')
             self.board = 'pol'
             if self.file_name is None:
-                i = 0
                 with open(f"{self.in_path}pol_062016-112019_labeled.ndjson") as f:
                     for line in tqdm(f, desc='Threads'):
-                        if i > self.limit:
-                            break
-                        else:
-                            self.json_file = json.loads(line)
-                            self.thread_id = self.json_file['posts'][0]['no']
-                            self.extract_json()
-                        i += 1
+                        self.json_file = json.loads(line)
+                        self.thread_id = self.json_file['posts'][0]['no']
+                        self.extract_json()
             else:
-                i = 0
                 with open(f"{self.in_path}{self.file_name}") as f:
                     for line in tqdm(f, desc='Threads'):
-                        if i > self.limit:
-                            break
-                        else:
-                            self.json_file = json.loads(line)
-                            self.thread_id = self.json_file['posts'][0]['no']
-                            self.extract_json()
-                        i += 1
+                        self.json_file = json.loads(line)
+                        self.thread_id = self.json_file['posts'][0]['no']
+                        self.extract_json()
 
     def extract_json(self):
         for post in self.json_file['posts']:
@@ -209,8 +199,7 @@ class Extractor:
         if thread_id in list(self.stat_df.index):
             nx.write_gexf(self.generate_network(thread_id), f"{self.out_path}/gexfs/{thread_id}.gexf")
         else:
-            print(
-                'Die angegebene Thread ID wurde im Datensatz nicht gefunden. Bitte überprüfe, ob die ID richtig ist.')
+            print('Thread id not found. Please check if the provided thread id is correct.')
 
     def generate_edge_list(self, thread_id=None):
         edge_list = []
@@ -262,5 +251,5 @@ class Extractor:
     def save_df_csvs(self, path=None):
         if path is None:
             path = self.out_path
-        self.stat_df.to_csv(f"{path}stat_df.pkl")
-        self.post_df.to_csv(f"{path}post_df.pkl")
+        self.stat_df.to_csv(f"{path}stat_df.csv")
+        self.post_df.to_csv(f"{path}post_df.csv")
