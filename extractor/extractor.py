@@ -234,10 +234,10 @@ class Extractor:
                                    (self.stat_df['replies'] <= max_replies) &
                                    (self.stat_df['language'] == language)].index
         if self.filter_cyclic:
-            for thread_id in tqdm(thread_list):
+            for thread_id in tqdm(thread_list, desc="Saving gexfs: "):
                 self.save_gexf(thread_id)
         else:
-            for thread_id in tqdm(thread_list):
+            for thread_id in tqdm(thread_list, desc="Saving gexfs: "):
                 self.save_gexf(thread_id, save_cyclic=True)
         # todo create gexf (b-mode or id-mode)
 
