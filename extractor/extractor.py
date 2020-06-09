@@ -69,16 +69,28 @@ class Extractor:
         elif self.mode == 'pol_set':
             self.post_keys.append('extracted_poster_id')
             self.board = 'pol'
-            i = 0
-            with open(f"{self.in_path}pol_062016-112019_labeled.ndjson") as f:
-                for line in tqdm(f, desc='Threads'):
-                    if i > self.limit:
-                        break
-                    else:
-                        self.json_file = json.loads(line)
-                        self.thread_id = self.json_file['posts'][0]['no']
-                        self.extract_json()
-                    i += 1
+            if self.file_name is None:
+                i = 0
+                with open(f"{self.in_path}pol_062016-112019_labeled.ndjson") as f:
+                    for line in tqdm(f, desc='Threads'):
+                        if i > self.limit:
+                            break
+                        else:
+                            self.json_file = json.loads(line)
+                            self.thread_id = self.json_file['posts'][0]['no']
+                            self.extract_json()
+                        i += 1
+            else:
+                i = 0
+                with open(f"{self.in_path}{self.file_name}") as f:
+                    for line in tqdm(f, desc='Threads'):
+                        if i > self.limit:
+                            break
+                        else:
+                            self.json_file = json.loads(line)
+                            self.thread_id = self.json_file['posts'][0]['no']
+                            self.extract_json()
+                        i += 1
 
     def extract_json(self):
         for post in self.json_file['posts']:
