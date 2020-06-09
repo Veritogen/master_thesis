@@ -200,15 +200,15 @@ class Extractor:
                     graph.add_edge(index, resto)
         return graph
 
-    def save_gexf(self, thread_id=None, save_cyclic=False):
+    def save_gexf(self, thread_id, path, save_cyclic=False):
         if thread_id in list(self.stat_df.index):
             g = self.generate_network(thread_id)
             is_acyclic = nx.algorithms.dag.is_directed_acyclic_graph(g)
             if is_acyclic:
-                nx.write_gexf(g, f"{self.out_path}/gexfs/{thread_id}.gexf")
+                nx.write_gexf(g, f"{path}{thread_id}.gexf")
                 self.stat_df.at[thread_id, 'is_acyclic'] = True
             elif not is_acyclic and save_cyclic:
-                nx.write_gexf(g, f"{self.out_path}/gexfs/{thread_id}.gexf")
+                nx.write_gexf(g, f"{path}{thread_id}.gexf")
                 self.stat_df.at[thread_id, 'is_acyclic'] = False
             else:
                 self.stat_df.at[thread_id, 'is_acyclic'] = False
@@ -229,16 +229,17 @@ class Extractor:
         return edge_list
 
     def create_gexfs(self, min_replies=275, max_replies=325, language='en'):
-        os.makedirs(f"{self.out_path}/gexfs/{min_replies}-{max_replies}/", exist_ok=True)
+        path = f"{self.out_path}/gexfs/{min_replies}-{max_replies}/"
+        os.makedirs(path, exist_ok=True)
         thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) &
                                    (self.stat_df['replies'] <= max_replies) &
                                    (self.stat_df['language'] == language)].index
         if self.filter_cyclic:
             for thread_id in tqdm(thread_list, desc="Saving gexfs: "):
-                self.save_gexf(thread_id)
+                self.save_gexf(thread_id, path)
         else:
             for thread_id in tqdm(thread_list, desc="Saving gexfs: "):
-                self.save_gexf(thread_id, save_cyclic=True)
+                self.save_gexf(thread_id, path, save_cyclic=True)
         # todo create gexf (b-mode or id-mode)
 
     def return_documents(self, text_column="own_text", min_replies=275, max_replies=325, language='en'):
