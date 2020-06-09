@@ -1,26 +1,25 @@
 import spacy
-import multiprocessing
 import re
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from tqdm import tqdm
-from sklearn.decomposition import LatentDirichletAllocation as LDA
-from sklearn.model_selection import GridSearchCV
-import pyLDAvis.sklearn
+import gensim.corpora as corpora
+from gensim.models.phrases import Phrases, Phraser
+from gensim.models.ldamulticore import LdaMulticore
+from gensim.models import CoherenceModel
+import pyLDAvis
+import pyLDAvis.gensim
 import pandas as pd
 import numpy as np
 from collections import Counter, OrderedDict
 import seaborn as sns
 import matplotlib.pyplot as plt
 from langdetect import detect
-from spacy.vocab import Vocab
-from itertools import combinations
-from math import factorial
-from collections import defaultdict
+
 
 class NlPipe:
     def __init__(self, list_of_docs, document_ids=None, language_model="en_core_web_lg", tagger=False, parser=False,
                  ner=False, categorization=False, remove_stopwords=True, remove_punctuation=True, set_lower=True,
-                 remove_num=True, expand_stopwords=True, language_detection=False, allowed_languages=frozenset({'en'})):
+                 remove_num=True, expand_stopwords=True, language_detection=False, allowed_languages=frozenset({'en'}),
+                 use_phrases=None, bigram_min_count=10, bigram_threshold=100, trigram_threshold=100):
         """
         :param list_of_docs: List of strings where every document is one string.
         :param document_ids: The ids of the documents, matching the order of the list_of_docs
@@ -36,8 +35,12 @@ class NlPipe:
         :param expand_stopwords: Remove non-alpha-characters in stop words and add them to the stop words.
         :param language_detection: Detect language of docs.
         :param allowed_languages: Allowed language for the documents.
+        :param use_phrases: Set to bigram or trigram if the use of Gensmin Phrases
+        (https://radimrehurek.com/gensim/models/phrases.html) is wanted.
+        :param bigram_min_count: Minimum occurrence of bigrams to be considered by Gensmin Phrases.
+        :param bigram_threshold: Threshold for Gensim Phrases bigram settings.
+        :param trigram_threshold: Threshold for Gensim Phrases trigram settings.
         """
-
         self.pipe_disable = []
         if not tagger:
             self.pipe_disable.append("tagger")
@@ -59,27 +62,34 @@ class NlPipe:
             for stop in stops:
                 self.nlp.Defaults.stop_words.add(re.sub(r"[\W]", "", stop))
         self.spacy_docs = None
-        self.processed_docs = None
-        self.vectorizer = None
+        self.preprocessed_docs = None
         self.bag_of_words = None
-        self.tf_idf = None
         self.preprocessing_batch_size = 500
-        self.processes = multiprocessing.cpu_count()-2
+        self.processes = 4
         self.lda_model = None
-        self.lda_output = None
-        self.grid_search = None
-        self.evaluation_output = None
         self.result_df = None
         self.word_topic_df = None
-        self.word_topic_intersection = None
-        self.intersection_score = None
         self.allowed_languages = allowed_languages
         self.language_detection = language_detection
-        self.spacy_vocab = None
-        self.word_distance_dict = None
-        self.word_topic_distance_sum = 0
-        self.unigram_dict = None
-        self.bigram_dict = None
+        self.id2word = None
+        self.coherence_dict = None
+        if use_phrases not in {None, "bigram", "trigram"}:
+            raise Exception("Please use valid option (None, 'bigram' or 'trigram) to make use of this function.")
+        else:
+            self.use_phrases = use_phrases
+            if self.use_phrases == "bigram" and isinstance(bigram_threshold, int) and isinstance(bigram_min_count, int):
+                self.bigram_min_count = bigram_min_count
+                self.bigram_threshold = bigram_threshold
+            elif self.use_phrases == "trigram" and isinstance(bigram_threshold, int) \
+                    and isinstance(trigram_threshold, int) and isinstance(bigram_min_count, int):
+                self.bigram_min_count = bigram_min_count
+                self.bigram_threshold = bigram_threshold
+                self.trigram_threshold = trigram_threshold
+            elif self.use_phrases is None:
+                pass
+            else:
+                raise Exception("Thresholds or minimum count for bigrams/trigrams not integer. Please provide "
+                                "threshold and minimum count for bigrams (and trigrams) as integer.")
 
     def enable_pipe_component(self, component):
         if component in self.pipe_disable:
@@ -106,7 +116,7 @@ class NlPipe:
                                                    desc="Preprocessing text with spacy: ")]
 
     def preprocess(self):
-        self.processed_docs = []
+        self.preprocessed_docs = []
         if not self.spacy_docs:
             self.preprocess_spacy()
         for spacy_doc in tqdm(self.spacy_docs, desc="Removing stop words/punctuation/numeric chars: "):
@@ -124,63 +134,70 @@ class NlPipe:
                     word = re.sub(r"[\d]", "", word)
                 if self.remove_punctuation:
                     word = re.sub(r"[\W]", "", word)
-                if len(word) >= 2:
+                if len(word) >= 2 and word != "wbr":
                     doc.append(word)
-            self.processed_docs.append(doc)
+            self.preprocessed_docs.append(doc)
 
-    def create_bag_of_words(self, n_grams=(1, 1), min_df=0.01, max_df=0.6):
-        self.preprocess_spacy()
-        self.preprocess()
-        joined_docs = []
-        for doc in self.processed_docs:
-            joined_docs.append(" ".join(doc))
-        self.vectorizer = CountVectorizer(lowercase=False, ngram_range=n_grams, min_df=min_df,
-                                          max_df=max_df)
-        self.bag_of_words = self.vectorizer.fit_transform(joined_docs)
+    def create_bag_of_words(self, min_df=5, max_df=0.6):
+        if not self.preprocessed_docs:
+            self.preprocess()
+        if self.use_phrases == "bigram" or self.use_phrases == "trigram":
+            bigram_phrases = Phrases(self.preprocessed_docs, min_count = self.bigram_min_count,
+                                   threshold=self.bigram_threshold)
+            bigram_phraser = Phraser(bigram_phrases)
+            if self.use_phrases == "bigram":
+                self.preprocessed_docs = [bigram_phraser[doc] for doc in self.preprocessed_docs]
+        if self.use_phrases == "trigram":
+            trigram_phrases = Phrases(bigram_phrases[self.preprocessed_docs], threshold=self.trigram_threshold)
+            trigram_phraser = Phraser(trigram_phrases)
+            self.preprocessed_docs = [trigram_phraser[bigram_phraser[doc]] for doc in self.preprocessed_docs]
+        self.id2word = corpora.Dictionary(self.preprocessed_docs)
+        self.id2word.filter_extremes(no_below=min_df, no_above=max_df)
+        self.bag_of_words = [self.id2word.doc2bow(doc) for doc in self.preprocessed_docs]
 
-    def create_tf_idf(self, n_grams=(1, 1), min_df=0.01, max_df=0.6):
-        self.preprocess_spacy()
-        self.preprocess()
-        joined_docs = []
-        for doc in self.processed_docs:
-            joined_docs.append(" ".join(doc))
-        self.vectorizer = TfidfVectorizer(lowercase=False, ngram_range=n_grams, min_df=min_df, max_df=max_df)
-        self.tf_idf = self.vectorizer.fit_transform(joined_docs)
+    def create_lda_model(self, no_topics=10):
+        if self.bag_of_words is None:
+            self.create_bag_of_words()
+        self.lda_model = LdaMulticore(corpus=self.bag_of_words, id2word=self.id2word, num_topics=no_topics)
 
-    def create_lda_model(self, no_topics=10, input_type="bag"):
-        self.lda_model = LDA(n_jobs=self.processes, n_components=no_topics)
-        if input_type == "bag":
-            if self.bag_of_words is None:
-                self.create_bag_of_words()
-            self.lda_output = self.lda_model.fit_transform(self.bag_of_words)
-        else:
-            self.create_tf_idf()
-            self.lda_output = self.lda_model.fit_transform(self.tf_idf)
-
-    def search_best_model(self, n_components=[2, 3, 4, 5, 10, 15, 20, 25], learning_decay=[.5, .7, .9], input_type="bag"):
-        lda_model = LDA()
-        self.grid_search = GridSearchCV(lda_model, {"n_components": n_components, "learning_decay": learning_decay})
-        if input_type == "bag":
-            if self.bag_of_words is None:
-                self.create_bag_of_words()
-            self.grid_search.fit(self.bag_of_words)
-        else:
-            if self.tf_idf is None:
-                self.create_tf_idf()
-            self.grid_search.fit(self.tf_idf)
-
-    def create_document_topic_df(self, model=None, no_topics=10, input_type="bag", input_matrix=None):
+    def calculate_coherence(self, model=None):
         if model is None:
-            self.create_lda_model(no_topics=no_topics, input_type=input_type)
+            model = self.lda_model
+        else:
+            model = model
+        coherence_model = CoherenceModel(model=model, texts=self.preprocessed_docs, dictionary=self.id2word)
+        return coherence_model
+
+    def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), return_best_model=True):
+        self.coherence_dict = {}
+        for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
+            self.create_lda_model(no_topics=no_topics)
+            coherence_model = self.calculate_coherence()
+            self.coherence_dict[no_topics] = {"lda_model": self.lda_model,
+                                              "coherence_model": coherence_model,
+                                              "coherence_score": coherence_model.get_coherence()}
+        if return_best_model:
+            model_score_list = []
+            for no_topics in self.coherence_dict.keys():
+                model_score_list.append((no_topics, self.coherence_dict[no_topics]['coherence_score'],
+                                         self.coherence_dict[no_topics]['lda_model']))
+            model_score_list = sorted(model_score_list, key=lambda x: x[1], reverse=True)
+            #returns number of topics and the lda_model
+            return model_score_list[0][0], model_score_list[0][2]
+
+    def create_document_topic_df(self, model=None, no_topics=10):
+        if model is None:
+            self.create_lda_model(no_topics=no_topics)
         else:
             self.lda_model = model
-        if input_matrix is not None:
-            self.evaluation_output = self.lda_model.fit_transform(input_matrix)
-        elif input_type == "bag":
-            self.evaluation_output = self.lda_model.fit_transform(self.bag_of_words)
-        else:
-            self.evaluation_output = self.lda_model.fit_transform(self.tf_idf)
-        self.result_df = pd.DataFrame(self.evaluation_output)
+        topic_result_list = []
+        for doc in self.lda_model.get_document_topics(bow=self.bag_of_words):
+            temp_dict = {}
+            for topic, probability in doc:
+                temp_dict[topic] = probability
+            topic_result_list.append(temp_dict)
+        self.result_df = pd.DataFrame(data=topic_result_list, columns=range(no_topics))
+        self.result_df = self.result_df.fillna(0)
         if self.document_ids is not None and not self.language_detection:
             self.result_df.index = self.document_ids
         elif self.document_ids is not None and self.language_detection:
@@ -196,6 +213,7 @@ class NlPipe:
         plt.show()
 
     def evaluate_model(self, no_words=30):
+        #todo: update 4 gensim
         keywords = np.array(self.vectorizer.get_feature_names())
         topic_keywords = []
         for topic_weights in self.lda_model.components_:
@@ -204,114 +222,5 @@ class NlPipe:
         self.word_topic_df = pd.DataFrame(topic_keywords, columns=[f"word_{x}" for x in range(no_words)])
 
     def evaluate_pyldavis(self):
-        panel = pyLDAvis.sklearn.prepare(self.lda_model, self.bag_of_words, self.vectorizer)
+        panel = pyLDAvis.gensim.prepare(self.lda_model, self.bag_of_words, self.id2word)
         pyLDAvis.show(panel)
-
-    def get_word_topic_intersection(self, no_words=30, no_topics=10):
-        if not isinstance(self.word_topic_df, pd.DataFrame):
-            self.evaluate_model(no_words=no_words)
-        elif isinstance(self.word_topic_df, pd.DataFrame) and self.word_topic_df.shape[1] != no_words:
-            self.evaluate_model(no_words=no_words)
-        intersection_list = []
-        intersection_score = 0
-        all_combinations = [combo for combo in combinations(range(no_topics), 2)]
-        for x in range(no_topics):
-            temp_list = []
-            for y in range(no_topics):
-                if x != y:
-                    temp_list.append(len(set(self.word_topic_df[self.word_topic_df.index == x].values[0]).intersection(
-                        self.word_topic_df[self.word_topic_df.index == y].values[0]))/no_words)
-                if (x, y) in all_combinations:
-                    intersection_score += len(set(self.word_topic_df[self.word_topic_df.index == x].values[0])
-                                              .intersection(self.word_topic_df[self.word_topic_df.index == y]
-                                                            .values[0]))/no_words
-                else:
-                    temp_list.append(1)
-            intersection_list.append(temp_list)
-        self.intersection_score = intersection_score / len(all_combinations)
-        self.word_topic_intersection = pd.DataFrame(intersection_list)
-
-    def get_topic_word_distance_sum(self, no_words=30):
-        self.word_distance_dict = {}
-        if not isinstance(self.word_topic_df, pd.DataFrame):
-            self.evaluate_model(no_words=no_words)
-        elif isinstance(self.word_topic_df, pd.DataFrame) and self.word_topic_df.shape[1] != no_words:
-            self.evaluate_model(no_words=no_words)
-        if self.spacy_vocab is None:
-            self.load_textgain_embs()
-        for index in self.word_topic_df.index:
-            topic_distance_sum = 0
-            missing_count = 0
-            for word_a, word_b in combinations(self.word_topic_df[self.word_topic_df.index == index].values[0], 2):
-                if self.spacy_vocab.has_vector(str(word_a)) and self.spacy_vocab.has_vector(str(word_b)):
-                    topic_distance_sum += np.linalg.norm(self.spacy_vocab.get_vector(str(word_a)) -
-                                                         self.spacy_vocab.get_vector(str(word_b)))
-                else:
-                    missing_count += 1
-            self.word_distance_dict[index] = topic_distance_sum / ((factorial(no_words)/(factorial(2) *
-                                                                                         factorial(no_words-2)))
-                                                                   - missing_count)
-        self.word_topic_distance_sum = sum(self.word_distance_dict.values())/len(self.word_distance_dict.keys())
-
-        # todo: sum of distance between words in topic derived from word embedding
-        # todo: sum of sum of distances divided by no topics
-
-    def load_textgain_embs(self, from_txt=False, path="textgain_embeddings/spacy_vocab"):
-        self.spacy_vocab = Vocab()
-        if from_txt:
-            with open(path) as f:
-                for line in f:
-                    split_line = line.split()
-                    self.spacy_vocab.set_vector("".join(split_line[:-150]),
-                                                np.array([float(coord) for coord in split_line[-150:]]))
-        else:
-            self.spacy_vocab.from_disk(path)
-
-    def calculate_coherence(self, type="cosine"):
-        pass
-        #todo: add coherence function here
-
-    def calculate_jaccard(self):
-        pass
-        #todo: calculate jaccard distance here
-
-    def calculate_cosine(self, word_1, word_2):
-        return np.dot(word_1, word_2)/(np.linalg.norm(word_1)*np.linalg.norm(word_2))
-
-    def calculate_dice(self):
-        pass
-        #todo: calculate dice coefficient here
-
-    def calculate_centroid_sim(self):
-        pass
-        #todo: calculate centroid similarity here
-
-    def calculate_word_probs(self):
-        #todo: calculate unigram  and probability of words
-        self.unigram_dict = defaultdict(int)
-        self.bigram_dict = defaultdict(int)
-        unigram_count = 0
-        bigram_count = 0
-        for doc in tqdm(self.processed_docs, desc="calculation uni- and bigram probabilities: "):
-            for i, word in enumerate(doc):
-                self.unigram_dict[word] += 1
-                unigram_count += 1
-                try:
-                    self.bigram_dict[" ".join([word, doc[i+1]])] += 1
-                    bigram_count += 1
-                except:
-                    pass
-        self.unigram_dict = {k: v/unigram_count for k, v in self.unigram_dict.items()}
-        self.bigram_dict = {k: v/bigram_count for k, v in self.bigram_dict.items()}
-
-    def calculate_pmi(self, word_1, word_2):
-        if self.unigram_dict is None or self.bigram_dict is None:
-            self.calculate_word_probs()
-        return np.log2(self.bigram_dict[" ".join([word_1, word_2])]/(self.unigram_dict[word_1] *
-                                                                     self.unigram_dict[word_2]))
-
-    def calculate_npmi(self, word_1, word_2):
-        return self.calculate_pmi(word_1, word_2)/(-np.log(self.bigram_dict[" ".join([word_1, word_2])]))
-
-    def get_weight_vectors(self, weight=2, type="npmi"):
-        pass
