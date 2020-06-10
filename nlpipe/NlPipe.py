@@ -65,7 +65,7 @@ class NlPipe:
         self.preprocessed_docs = None
         self.bag_of_words = None
         self.preprocessing_batch_size = 500
-        self.processes = 4
+        self.processes = 6
         self.lda_model = None
         self.result_df = None
         self.word_topic_df = None
@@ -110,10 +110,9 @@ class NlPipe:
                                                    desc="Preprocessing text with spacy: ")
                                if detect(doc.text) in self.allowed_languages]
         else:
-            self.spacy_docs = [doc for doc in tqdm(self.nlp.pipe(self.input_docs, disable=self.pipe_disable,
+            self.spacy_docs = list(self.nlp.pipe(self.input_docs, disable=self.pipe_disable,
                                                                  n_process=self.processes,
-                                                                 batch_size=self.preprocessing_batch_size),
-                                                   desc="Preprocessing text with spacy: ")]
+                                                                 batch_size=self.preprocessing_batch_size))
 
     def preprocess(self):
         self.preprocessed_docs = []
@@ -158,7 +157,8 @@ class NlPipe:
     def create_lda_model(self, no_topics=10):
         if self.bag_of_words is None:
             self.create_bag_of_words()
-        self.lda_model = LdaMulticore(corpus=self.bag_of_words, id2word=self.id2word, num_topics=no_topics)
+        self.lda_model = LdaMulticore(corpus=self.bag_of_words, id2word=self.id2word, num_topics=no_topics,
+                                      workers=self.processes)
 
     def calculate_coherence(self, model=None):
         if model is None:
