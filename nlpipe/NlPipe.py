@@ -142,7 +142,7 @@ class NlPipe:
             self.preprocess()
         if self.use_phrases == "bigram" or self.use_phrases == "trigram":
             bigram_phrases = Phrases(self.preprocessed_docs, min_count = self.bigram_min_count,
-                                   threshold=self.bigram_threshold)
+                                     threshold=self.bigram_threshold)
             bigram_phraser = Phraser(bigram_phrases)
             if self.use_phrases == "bigram":
                 self.preprocessed_docs = [bigram_phraser[doc] for doc in self.preprocessed_docs]
