@@ -121,6 +121,7 @@ class NlPipe:
         for spacy_doc in tqdm(self.spacy_docs, desc="Removing stop words/punctuation/numeric chars: "):
             doc = []
             for token in spacy_doc:
+                # todo: check if useful condition
                 if not self.remove_stop_words and token.is_stop:
                     word = token.text
                 elif token.is_stop:
@@ -141,7 +142,7 @@ class NlPipe:
         if not self.preprocessed_docs:
             self.preprocess()
         if self.use_phrases == "bigram" or self.use_phrases == "trigram":
-            bigram_phrases = Phrases(self.preprocessed_docs, min_count = self.bigram_min_count,
+            bigram_phrases = Phrases(self.preprocessed_docs, min_count=self.bigram_min_count,
                                      threshold=self.bigram_threshold)
             bigram_phraser = Phraser(bigram_phrases)
             if self.use_phrases == "bigram":
