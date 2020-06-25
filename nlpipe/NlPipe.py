@@ -222,6 +222,8 @@ class NlPipe:
             topic_keywords.append(keywords.take(top_keyword_locations))
         self.word_topic_df = pd.DataFrame(topic_keywords, columns=[f"word_{x}" for x in range(no_words)])
 
-    def evaluate_pyldavis(self):
-        panel = pyLDAvis.gensim.prepare(self.lda_model, self.bag_of_words, self.id2word)
+    def evaluate_pyldavis(self, model=None):
+        if model is None:
+            model = self.lda_model
+        panel = pyLDAvis.gensim.prepare(model, self.bag_of_words, self.id2word)
         pyLDAvis.show(panel)
