@@ -73,36 +73,17 @@ class NlPipe:
         self.language_detection = language_detection
         self.id2word = None
         self.coherence_dict = None
-        if use_phrases not in {None, "bigram", "trigram"}:
-            raise Exception("Please use valid option (None, 'bigram' or 'trigram) to make use of this function.")
-        else:
-            self.use_phrases = use_phrases
-            if self.use_phrases == "bigram" and isinstance(bigram_threshold, int) and isinstance(bigram_min_count, int):
-                self.bigram_min_count = bigram_min_count
-                self.bigram_threshold = bigram_threshold
-            elif self.use_phrases == "trigram" and isinstance(bigram_threshold, int) \
-                    and isinstance(trigram_threshold, int) and isinstance(bigram_min_count, int):
-                self.bigram_min_count = bigram_min_count
-                self.bigram_threshold = bigram_threshold
-                self.trigram_threshold = trigram_threshold
-            elif self.use_phrases is None:
-                pass
-            else:
-                raise Exception("Thresholds or minimum count for bigrams/trigrams not integer. Please provide "
-                                "threshold and minimum count for bigrams (and trigrams) as integer.")
+
 
     def enable_pipe_component(self, component):
         if component in self.pipe_disable:
             self.pipe_disable.remove(component)
-            #todo: add info if not in list from beginning or if successfully enable
 
     def disable_pipe_component(self, component):
         if component not in self.pipe_disable:
             self.pipe_disable.append(component)
-            # todo: add info if not in list from beginning or if successfully enable
 
     def preprocess_spacy(self):
-        # todo: add language check
         if self.language_detection:
             self.spacy_docs = [doc for doc in tqdm(self.nlp.pipe(self.input_docs, disable=self.pipe_disable,
                                                                  n_process=self.processes,
@@ -138,24 +119,36 @@ class NlPipe:
                     doc.append(word)
             self.preprocessed_docs.append(doc)
 
-    def create_bag_of_words(self, min_df=5, max_df=0.6):
+    def create_bag_of_words(self, min_df=5, max_df=0.5, keep_n=100000, keep_tokens=None, use_phrases=None,
+                            bigram_min_count=None, bigram_threshold=None, trigram_threshold=None):
+        if use_phrases not in {None, "bigram", "trigram"}:
+            raise Exception("Please use valid option (None, 'bigram' or 'trigram) to make use of this function.")
+        else:
+            if not use_phrases == "bigram" and isinstance(bigram_threshold, int) and isinstance(bigram_min_count, int)\
+                    or not use_phrases == "trigram" and isinstance(bigram_threshold, int) \
+                    and isinstance(trigram_threshold, int) and isinstance(bigram_min_count, int):
+                raise Exception("Thresholds or minimum count for bigrams/trigrams not integer. Please provide "
+                                "threshold and minimum count for bigrams (and trigrams) as integer.")
+
         if not self.preprocessed_docs:
             self.preprocess()
-        if self.use_phrases == "bigram" or self.use_phrases == "trigram":
+        if use_phrases == "bigram" or self.use_phrases == "trigram":
             bigram_phrases = Phrases(self.preprocessed_docs, min_count=self.bigram_min_count,
                                      threshold=self.bigram_threshold)
             bigram_phraser = Phraser(bigram_phrases)
-            if self.use_phrases == "bigram":
+            if use_phrases == "bigram":
                 self.preprocessed_docs = [bigram_phraser[doc] for doc in self.preprocessed_docs]
-        if self.use_phrases == "trigram":
+        if use_phrases == "trigram":
             trigram_phrases = Phrases(bigram_phrases[self.preprocessed_docs], threshold=self.trigram_threshold)
             trigram_phraser = Phraser(trigram_phrases)
             self.preprocessed_docs = [trigram_phraser[bigram_phraser[doc]] for doc in self.preprocessed_docs]
         self.id2word = corpora.Dictionary(self.preprocessed_docs)
-        self.id2word.filter_extremes(no_below=min_df, no_above=max_df)
+        self.id2word.filter_extremes(no_below=min_df, no_above=max_df,keep_n=keep_n, keep_tokens=keep_tokens)
         self.bag_of_words = [self.id2word.doc2bow(doc) for doc in self.preprocessed_docs]
 
     def create_lda_model(self, no_topics=10):
+        #todo: add seed for reproducable results
+        #todo: add possibility to set alpha
         if self.bag_of_words is None:
             self.create_bag_of_words()
         self.lda_model = LdaMulticore(corpus=self.bag_of_words, id2word=self.id2word, num_topics=no_topics,
@@ -170,6 +163,7 @@ class NlPipe:
         return coherence_model
 
     def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), return_best_model=True):
+        #todo: save only best model
         self.coherence_dict = {}
         for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
             self.create_lda_model(no_topics=no_topics)
