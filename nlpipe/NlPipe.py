@@ -18,8 +18,7 @@ from langdetect import detect
 class NlPipe:
     def __init__(self, list_of_docs, document_ids=None, language_model="en_core_web_lg", tagger=False, parser=False,
                  ner=False, categorization=False, remove_stopwords=True, remove_punctuation=True, set_lower=True,
-                 remove_num=True, expand_stopwords=True, language_detection=False, allowed_languages=frozenset({'en'}),
-                 use_phrases=None, bigram_min_count=10, bigram_threshold=100, trigram_threshold=100):
+                 remove_num=True, expand_stopwords=True, language_detection=False, allowed_languages=frozenset({'en'})):
         """
         :param list_of_docs: List of strings where every document is one string.
         :param document_ids: The ids of the documents, matching the order of the list_of_docs
@@ -35,11 +34,6 @@ class NlPipe:
         :param expand_stopwords: Remove non-alpha-characters in stop words and add them to the stop words.
         :param language_detection: Detect language of docs.
         :param allowed_languages: Allowed language for the documents.
-        :param use_phrases: Set to bigram or trigram if the use of Gensmin Phrases
-        (https://radimrehurek.com/gensim/models/phrases.html) is wanted.
-        :param bigram_min_count: Minimum occurrence of bigrams to be considered by Gensmin Phrases.
-        :param bigram_threshold: Threshold for Gensim Phrases bigram settings.
-        :param trigram_threshold: Threshold for Gensim Phrases trigram settings.
         """
         self.pipe_disable = []
         if not tagger:
@@ -73,7 +67,6 @@ class NlPipe:
         self.language_detection = language_detection
         self.id2word = None
         self.coherence_dict = None
-
 
     def enable_pipe_component(self, component):
         if component in self.pipe_disable:
@@ -120,7 +113,19 @@ class NlPipe:
             self.preprocessed_docs.append(doc)
 
     def create_bag_of_words(self, min_df=5, max_df=0.5, keep_n=100000, keep_tokens=None, use_phrases=None,
-                            bigram_min_count=None, bigram_threshold=None, trigram_threshold=None):
+                            bigram_min_count=10, bigram_threshold=100, trigram_threshold=100):
+        """
+        :param min_df: Keep only tokens that appear in at least n documents
+        (see https://radimrehurek.com/gensim/corpora/dictionary.html)
+        :param max_df: Keep only tokens that appear in less than the fraction of documents (see link above)
+        :param keep_n: Keep only n most frequent tokens (see link above)
+        :param keep_tokens: Iterable of tokens not to be remove (see link above)
+        :param use_phrases: Set to bigram or trigram if the use of Gensmin Phrases
+        (https://radimrehurek.com/gensim/models/phrases.html) is wanted.
+        :param bigram_min_count: Minimum occurrence of bigrams to be considered by Gensmin Phrases.
+        :param bigram_threshold: Threshold for Gensim Phrases bigram settings.
+        :param trigram_threshold: Threshold for Gensim Phrases trigram settings.
+        """
         if use_phrases not in {None, "bigram", "trigram"}:
             raise Exception("Please use valid option (None, 'bigram' or 'trigram) to make use of this function.")
         else:
