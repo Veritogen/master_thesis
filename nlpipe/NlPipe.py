@@ -151,13 +151,16 @@ class NlPipe:
         self.id2word.filter_extremes(no_below=min_df, no_above=max_df,keep_n=keep_n, keep_tokens=keep_tokens)
         self.bag_of_words = [self.id2word.doc2bow(doc) for doc in self.preprocessed_docs]
 
-    def create_lda_model(self, no_topics=10):
-        #todo: add seed for reproducable results
-        #todo: add possibility to set alpha
+    def create_lda_model(self, no_topics=10, random_state=42, alpha='symmetric'):
+        """
+        :param no_topics: Number of topics that are to be explored by lda model
+        :param random_state: Random state for reproducible results (default 42, gensim default is None)
+        :param alpha: set alpha to "symmetric" or "asymmetric" (gensim default is "symmetric")
+        """
         if self.bag_of_words is None:
             self.create_bag_of_words()
         self.lda_model = LdaMulticore(corpus=self.bag_of_words, id2word=self.id2word, num_topics=no_topics,
-                                      workers=self.processes)
+                                      workers=self.processes, random_state=random_state, alpha=alpha)
 
     def calculate_coherence(self, model=None):
         if model is None:
