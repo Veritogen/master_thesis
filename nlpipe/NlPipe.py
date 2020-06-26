@@ -132,14 +132,14 @@ class NlPipe:
 
         if not self.preprocessed_docs:
             self.preprocess()
-        if use_phrases == "bigram" or self.use_phrases == "trigram":
-            bigram_phrases = Phrases(self.preprocessed_docs, min_count=self.bigram_min_count,
-                                     threshold=self.bigram_threshold)
+        if use_phrases == "bigram" or use_phrases == "trigram":
+            bigram_phrases = Phrases(self.preprocessed_docs, min_count=bigram_min_count,
+                                     threshold=bigram_threshold)
             bigram_phraser = Phraser(bigram_phrases)
             if use_phrases == "bigram":
                 self.preprocessed_docs = [bigram_phraser[doc] for doc in self.preprocessed_docs]
         if use_phrases == "trigram":
-            trigram_phrases = Phrases(bigram_phrases[self.preprocessed_docs], threshold=self.trigram_threshold)
+            trigram_phrases = Phrases(bigram_phrases[self.preprocessed_docs], threshold=trigram_threshold)
             trigram_phraser = Phraser(trigram_phrases)
             self.preprocessed_docs = [trigram_phraser[bigram_phraser[doc]] for doc in self.preprocessed_docs]
         self.id2word = corpora.Dictionary(self.preprocessed_docs)
