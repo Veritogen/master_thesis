@@ -112,11 +112,12 @@ class NlPipe:
                     doc.append(word)
             self.preprocessed_docs.append(doc)
 
-    def create_bag_of_words(self, min_df=5, max_df=0.5, keep_n=100000, keep_tokens=None, use_phrases=None,
+    def create_bag_of_words(self,filter_extremes=True, min_df=5, max_df=0.5, keep_n=100000, keep_tokens=None, use_phrases=None,
                             bigram_min_count=10, bigram_threshold=100, trigram_threshold=100):
         """
-        :param min_df: Keep only tokens that appear in at least n documents
-        (see https://radimrehurek.com/gensim/corpora/dictionary.html)
+        :param filter_extremes: En-/Disable filtering of tokens that occure too frequent/not frequent enough
+        (https://radimrehurek.com/gensim/corpora/dictionary.html)
+        :param min_df: Keep only tokens that appear in at least n documents (see link above)
         :param max_df: Keep only tokens that appear in less than the fraction of documents (see link above)
         :param keep_n: Keep only n most frequent tokens (see link above)
         :param keep_tokens: Iterable of tokens not to be remove (see link above)
@@ -148,7 +149,8 @@ class NlPipe:
             trigram_phraser = Phraser(trigram_phrases)
             self.preprocessed_docs = [trigram_phraser[bigram_phraser[doc]] for doc in self.preprocessed_docs]
         self.id2word = corpora.Dictionary(self.preprocessed_docs)
-        self.id2word.filter_extremes(no_below=min_df, no_above=max_df,keep_n=keep_n, keep_tokens=keep_tokens)
+        if filter_extremes:
+            self.id2word.filter_extremes(no_below=min_df, no_above=max_df,keep_n=keep_n, keep_tokens=keep_tokens)
         self.bag_of_words = [self.id2word.doc2bow(doc) for doc in self.preprocessed_docs]
 
     def create_lda_model(self, no_topics=10, random_state=42, alpha='symmetric'):
