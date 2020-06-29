@@ -154,7 +154,7 @@ class NlPipe:
             self.preprocessed_docs = [trigram_phraser[bigram_phraser[doc]] for doc in self.preprocessed_docs]
         self.id2word = corpora.Dictionary(self.preprocessed_docs)
         if filter_extremes:
-            self.id2word.filter_extremes(no_below=min_df, no_above=max_df,keep_n=keep_n, keep_tokens=keep_tokens)
+            self.id2word.filter_extremes(no_below=min_df, no_above=max_df, keep_n=keep_n, keep_tokens=keep_tokens)
         self.bag_of_words = [self.id2word.doc2bow(doc) for doc in self.preprocessed_docs]
 
     def create_lda_model(self, no_topics=10, random_state=42, alpha='symmetric'):
@@ -176,29 +176,31 @@ class NlPipe:
         coherence_model = CoherenceModel(model=model, texts=self.preprocessed_docs, dictionary=self.id2word)
         return coherence_model
 
-    def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas=[0.1], save_models=False,
-                          return_best_model=False):
-        #todo: save only best model: 1. introduce save_model param, check if coherence score is bigger and save model param active, if true, save model (and params?) (to class?), if return_model, return result
+    def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas=[0.1], save_best_model=True,
+                          save_models=False, return_best_model=False):
+        if return_best_model and not save_best_model:
+            raise Exception("To return the best model, the parameter save_best_model has to be set to True.")
         self.coherence_dict = {}
+        best_score = 0
         for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
             self.coherence_dict[no_topics] = {}
             for alpha in alphas:
                 self.create_lda_model(no_topics=no_topics, alpha=alpha)
                 coherence_model = self.calculate_coherence()
+                coherence_score = coherence_model.get_coherence()
                 if save_models:
                     self.coherence_dict[no_topics][alpha] = {"lda_model": self.lda_model,
                                                              "coherence_model": coherence_model,
-                                                             "coherence_score": coherence_model.get_coherence()}
+                                                             "coherence_score": coherence_score}
                 else:
-                    self.coherence_dict[no_topics][alpha] = {"coherence_score": coherence_model.get_coherence()}
+                    self.coherence_dict[no_topics][alpha] = {"coherence_score": coherence_score}
+                if save_best_model and coherence_score > best_score:
+                    best_score = coherence_score
+                    best_model = self.lda_model
+                    best_topic_no = no_topics
         if return_best_model:
-            model_score_list = []
-            for no_topics in self.coherence_dict.keys():
-                model_score_list.append((no_topics, self.coherence_dict[no_topics]['coherence_score'],
-                                         self.coherence_dict[no_topics]['lda_model']))
-            model_score_list = sorted(model_score_list, key=lambda x: x[1], reverse=True)
             #returns number of topics and the lda_model
-            return model_score_list[0][0], model_score_list[0][2]
+            return best_topic_no, best_model
 
     def create_document_topic_df(self, model=None, no_topics=10):
         if model is None:
