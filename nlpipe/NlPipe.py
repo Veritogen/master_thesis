@@ -112,8 +112,8 @@ class NlPipe:
                     doc.append(word)
             self.preprocessed_docs.append(doc)
 
-    def create_bag_of_words(self,filter_extremes=True, min_df=5, max_df=0.5, keep_n=100000, keep_tokens=None, use_phrases=None,
-                            bigram_min_count=10, bigram_threshold=100, trigram_threshold=100):
+    def create_bag_of_words(self, filter_extremes=True, min_df=5, max_df=0.5, keep_n=100000, keep_tokens=None,
+                            use_phrases=None, bigram_min_count=10, bigram_threshold=100, trigram_threshold=100):
         """
         :param filter_extremes: En-/Disable filtering of tokens that occure too frequent/not frequent enough
         (https://radimrehurek.com/gensim/corpora/dictionary.html)
@@ -129,10 +129,14 @@ class NlPipe:
         """
         if use_phrases not in {None, "bigram", "trigram"}:
             raise Exception("Please use valid option (None, 'bigram' or 'trigram) to make use of this function.")
+        #todo: check logic
         else:
-            if not use_phrases == "bigram" and isinstance(bigram_threshold, int) and isinstance(bigram_min_count, int)\
-                    or not use_phrases == "trigram" and isinstance(bigram_threshold, int) \
-                    and isinstance(trigram_threshold, int) and isinstance(bigram_min_count, int):
+            if use_phrases == "bigram" and not isinstance(bigram_threshold, int) and not isinstance(bigram_min_count,
+                                                                                                    int):
+                raise Exception("Thresholds or minimum count for bigrams/trigrams not integer. Please provide "
+                                "threshold and minimum count for bigrams (and trigrams) as integer.")
+            elif use_phrases == "trigram" and not isinstance(bigram_threshold, int) \
+                    or not isinstance(trigram_threshold, int) or not isinstance(bigram_min_count, int):
                 raise Exception("Thresholds or minimum count for bigrams/trigrams not integer. Please provide "
                                 "threshold and minimum count for bigrams (and trigrams) as integer.")
 
@@ -172,15 +176,21 @@ class NlPipe:
         coherence_model = CoherenceModel(model=model, texts=self.preprocessed_docs, dictionary=self.id2word)
         return coherence_model
 
-    def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), return_best_model=True):
-        #todo: save only best model
+    def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas=[0.1], save_models=False,
+                          return_best_model=False):
+        #todo: save only best model: 1. introduce save_model param, check if coherence score is bigger and save model param active, if true, save model (and params?) (to class?), if return_model, return result
         self.coherence_dict = {}
         for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
-            self.create_lda_model(no_topics=no_topics)
-            coherence_model = self.calculate_coherence()
-            self.coherence_dict[no_topics] = {"lda_model": self.lda_model,
-                                              "coherence_model": coherence_model,
-                                              "coherence_score": coherence_model.get_coherence()}
+            self.coherence_dict[no_topics] = {}
+            for alpha in alphas:
+                self.create_lda_model(no_topics=no_topics, alpha=alpha)
+                coherence_model = self.calculate_coherence()
+                if save_models:
+                    self.coherence_dict[no_topics][alpha] = {"lda_model": self.lda_model,
+                                                             "coherence_model": coherence_model,
+                                                             "coherence_score": coherence_model.get_coherence()}
+                else:
+                    self.coherence_dict[no_topics][alpha] = {"coherence_score": coherence_model.get_coherence()}
         if return_best_model:
             model_score_list = []
             for no_topics in self.coherence_dict.keys():
