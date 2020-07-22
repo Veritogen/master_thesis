@@ -8,30 +8,26 @@ import networkx as nx
 import warnings
 import logging
 from langdetect import detect
-
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
-
-
-# todo: setup logger
+#todo: setup logger
 
 
 class Extractor:
-    def __init__(self, in_path, out_path=None, mode="legacy", file_name=None, filter_cyclic=True):
+    def __init__(self, in_path, out_path=None, mode="legacy", limit=100000, file_name=None):
         self.in_path = in_path
         if out_path is None:
             self.out_path = self.in_path
         else:
             self.out_path = out_path
-            os.makedirs(f"{self.out_path}", exist_ok=True)
         self.file_name = file_name
         self.mode = mode
         self.file_dict = None
         self.stat_dict = None
         self.post_list = None
-        self.relevant_stats = ['no', 'semantic_url', 'time', 'archived_on', 'replies', 'images', 'bumplimit',
+        self.relevant_stats = ['no','semantic_url', 'time', 'archived_on',  'replies', 'images', 'bumplimit',
                                'imagelimit']
-        self.ignore_keys = {'semantic_url', 'archived_on', 'replies', 'images', 'bumplimit',
-                            'imagelimit', 'closed', 'archived'}
+        self.ignore_keys = {'semantic_url', 'archived_on',  'replies', 'images', 'bumplimit',
+                               'imagelimit', 'closed', 'archived'}
         ''' 
         List of all possible information, shortened in order to save memory.
         self.post_keys = ['no', 'now', 'name', 'sub', 'com', 'filename', 'ext', 'w', 'h', 'tn_w', 'tn_h', 'tim', 'time',
@@ -45,7 +41,7 @@ class Extractor:
         self.board = None
         self.thread_id = None
         self.json_file = None
-        self.filter_cyclic = filter_cyclic
+        self.limit = limit
         if self.mode == "pol_set" and self.file_name is None:
             raise Exception("File name of dataset not provided.")
 
@@ -73,18 +69,16 @@ class Extractor:
         elif self.mode == 'pol_set':
             self.post_keys.append('extracted_poster_id')
             self.board = 'pol'
-            if self.file_name is None:
-                with open(f"{self.in_path}pol_062016-112019_labeled.ndjson") as f:
-                    for line in tqdm(f, desc='Threads'):
+            i = 0
+            with open(f"{self.in_path}pol_062016-112019_labeled.ndjson") as f:
+                for line in tqdm(f, desc='Threads'):
+                    if i > self.limit:
+                        break
+                    else:
                         self.json_file = json.loads(line)
                         self.thread_id = self.json_file['posts'][0]['no']
                         self.extract_json()
-            else:
-                with open(f"{self.in_path}{self.file_name}") as f:
-                    for line in tqdm(f, desc='Threads'):
-                        self.json_file = json.loads(line)
-                        self.thread_id = self.json_file['posts'][0]['no']
-                        self.extract_json()
+                    i += 1
 
     def extract_json(self):
         for post in self.json_file['posts']:
@@ -137,7 +131,6 @@ class Extractor:
         self.stat_df = pd.DataFrame(data=self.stat_dict).transpose()
         self.stat_df.index = self.stat_df.no
         self.stat_df = self.stat_df.drop(columns='no')
-        self.stat_df['is_acyclic'] = False
         post_columns = self.post_keys[:]
         for column in ['thread_id', 'full_string', 'quoted_list', 'quote_string', 'own_text']:
             post_columns.append(column)
@@ -148,7 +141,7 @@ class Extractor:
         self.detect_lang()
 
     def strip_text(self, text):
-        # todo: handle dead link class
+        #todo: handle dead link class
         soup = bs(text, 'html.parser')
         full_string = ''
         quoted_list = []
@@ -200,21 +193,12 @@ class Extractor:
                     graph.add_edge(index, resto)
         return graph
 
-    def save_gexf(self, thread_id, path, save_cyclic=False):
+    def save_gexf(self, thread_id=None):
         if thread_id in list(self.stat_df.index):
-            g = self.generate_network(thread_id)
-            is_acyclic = nx.algorithms.dag.is_directed_acyclic_graph(g)
-            if is_acyclic:
-                nx.write_gexf(g, f"{path}{thread_id}.gexf")
-                self.stat_df.at[thread_id, 'is_acyclic'] = True
-            elif not is_acyclic and save_cyclic:
-                nx.write_gexf(g, f"{path}{thread_id}.gexf")
-                self.stat_df.at[thread_id, 'is_acyclic'] = False
-            else:
-                self.stat_df.at[thread_id, 'is_acyclic'] = False
-
+            nx.write_gexf(self.generate_network(thread_id), f"{self.out_path}/gexfs/{thread_id}.gexf")
         else:
-            print('Thread id not found. Please check if the provided thread id is correct.')
+            print(
+                'Die angegebene Thread ID wurde im Datensatz nicht gefunden. Bitte überprüfe, ob die ID richtig ist.')
 
     def generate_edge_list(self, thread_id=None):
         edge_list = []
@@ -229,37 +213,23 @@ class Extractor:
         return edge_list
 
     def create_gexfs(self, min_replies=275, max_replies=325, language='en'):
-        path = f"{self.out_path}/gexfs/{min_replies}-{max_replies}/"
-        os.makedirs(path, exist_ok=True)
+        os.makedirs(f"{self.out_path}/gexfs/", exist_ok=True)
         thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) &
                                    (self.stat_df['replies'] <= max_replies) &
                                    (self.stat_df['language'] == language)].index
-        if self.filter_cyclic:
-            for thread_id in tqdm(thread_list, desc="Saving gexfs: "):
-                self.save_gexf(thread_id, path)
-        else:
-            for thread_id in tqdm(thread_list, desc="Saving gexfs: "):
-                self.save_gexf(thread_id, path, save_cyclic=True)
-        # todo create gexf (b-mode or id-mode)
+        for thread_id in tqdm(thread_list):
+            self.save_gexf(thread_id)
+        #todo create gexf (b-mode or id-mode)
 
-    def return_documents(self, text_column="own_text", min_replies=275, max_replies=325, language='en'):
+    def return_document_list(self, text_column="own_text", min_replies=275, max_replies=325, language='en'):
         if not isinstance(self.post_df, pd.DataFrame) or not isinstance(self.stat_df, pd.DataFrame):
             self.create_dfs()
         text_list = []
-        if self.filter_cyclic:
-            thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) &
-                                       (self.stat_df['replies'] <= max_replies) &
-                                       (self.stat_df['language'] == language) &
-                                       (self.stat_df['is_acyclic'] == True)
-                                       ].index
-        else:
-            thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) &
-                                       (self.stat_df['replies'] <= max_replies) &
-                                       (self.stat_df['language'] == language)
-                                       ].index
-        for thread_id in tqdm(thread_list, desc="Assembling text list."):
+        for thread_id in tqdm(self.stat_df[(self.stat_df['replies'] >= min_replies) &
+                                           (self.stat_df['replies'] <= max_replies) &
+                                           (self.stat_df['language'] == language)].index, desc="Assembling text list."):
             text_list.append(" ".join(self.post_df[text_column][self.post_df.thread_id == thread_id].tolist()))
-        return text_list, thread_list
+        return text_list
 
     def detect_lang(self):
         languages = []
@@ -280,5 +250,5 @@ class Extractor:
     def save_df_csvs(self, path=None):
         if path is None:
             path = self.out_path
-        self.stat_df.to_csv(f"{path}stat_df.csv")
-        self.post_df.to_csv(f"{path}post_df.csv")
+        self.stat_df.to_csv(f"{path}stat_df.pkl")
+        self.post_df.to_csv(f"{path}post_df.pkl")
