@@ -17,7 +17,11 @@ from itertools import combinations
 from math import factorial
 from collections import defaultdict
 
+
 class NlPipe:
+    """
+    class for creating LDA models using sklearn. Deprecated as gensim is used.
+    """
     def __init__(self, list_of_docs, document_ids=None, language_model="en_core_web_lg", tagger=False, parser=False,
                  ner=False, categorization=False, remove_stopwords=True, remove_punctuation=True, set_lower=True,
                  remove_num=True, expand_stopwords=True, language_detection=False, allowed_languages=frozenset({'en'})):

@@ -69,14 +69,27 @@ class NlPipe:
         self.coherence_dict = None
 
     def enable_pipe_component(self, component):
+        """
+        Method to enable components of the spacy pipeline after initialization of the class.
+        :param component: Component to enable (see https://spacy.io/usage/processing-pipelines/ for available
+        components).
+        """
         if component in self.pipe_disable:
             self.pipe_disable.remove(component)
 
     def disable_pipe_component(self, component):
+        """
+        Method to disable components of the spacy pipeline after initialization of the class.
+        :param component: Component to disable (see https://spacy.io/usage/processing-pipelines/ for available
+        components).
+        """
         if component not in self.pipe_disable:
             self.pipe_disable.append(component)
 
     def preprocess_spacy(self):
+        """
+        Method to preprocess the documents using spacy with the enabled pipeline components.
+        """
         if self.language_detection:
             self.spacy_docs = [doc for doc in tqdm(self.nlp.pipe(self.input_docs, disable=self.pipe_disable,
                                                                  n_process=self.processes,
@@ -89,6 +102,10 @@ class NlPipe:
                                                                  batch_size=self.preprocessing_batch_size))
 
     def preprocess(self):
+        """
+        Remove stop words, numbers and punctation as well as lower case all of the tokens, depending on the settings
+        passed to the class during initialization.
+        """
         self.preprocessed_docs = []
         if not self.spacy_docs:
             self.preprocess_spacy()
@@ -115,14 +132,15 @@ class NlPipe:
     def create_bag_of_words(self, filter_extremes=True, min_df=5, max_df=0.5, keep_n=100000, keep_tokens=None,
                             use_phrases=None, bigram_min_count=10, bigram_threshold=100, trigram_threshold=100):
         """
-        :param filter_extremes: En-/Disable filtering of tokens that occure too frequent/not frequent enough
+        :param filter_extremes: En-/Disable filtering of tokens that occur too frequent/not frequent enough
         (https://radimrehurek.com/gensim/corpora/dictionary.html)
         :param min_df: Keep only tokens that appear in at least n documents (see link above)
         :param max_df: Keep only tokens that appear in less than the fraction of documents (see link above)
         :param keep_n: Keep only n most frequent tokens (see link above)
         :param keep_tokens: Iterable of tokens not to be remove (see link above)
         :param use_phrases: Set to bigram or trigram if the use of Gensmin Phrases
-        (https://radimrehurek.com/gensim/models/phrases.html) is wanted.
+        (https://radimrehurek.com/gensim/models/phrases.html) is wanted. Will create bigrams/trigrams of frequently
+        co-occuring words (e.g. "new", "york" => "new_york").
         :param bigram_min_count: Minimum occurrence of bigrams to be considered by Gensmin Phrases.
         :param bigram_threshold: Threshold for Gensim Phrases bigram settings.
         :param trigram_threshold: Threshold for Gensim Phrases trigram settings.
@@ -169,6 +187,12 @@ class NlPipe:
                                       workers=self.processes, random_state=random_state, alpha=alpha)
 
     def calculate_coherence(self, model=None):
+        """
+        Method to calculate the coherence score of a given lda model. The model can either be provided or will be taken
+        from the class.
+        :param model: Model to use instead of the model saved within the class.
+        :return: Return coherence model, which also contains the coherence score of a model.
+        """
         if model is None:
             model = self.lda_model
         else:
@@ -178,6 +202,20 @@ class NlPipe:
 
     def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas=[0.1], save_best_model=True,
                           save_models=False, return_best_model=False):
+        #todo: save best model within class.
+        """
+        Method to search for the best lda model for a given number of topics. The best model will be determined by its
+        coherence score.
+        :param topic_list: Iterable of integers of topics to test the coherence score for.
+        :param alphas: Iterable of floats between 0 and 1 for determining the dirichlet prior of the lda model.
+        :param save_best_model: Set to true if the best model has to be saved within the class.
+        :param save_models: If set to false (default) only the coherence score for each combination of numbers of topics
+        and alphas will be saved. If set to true, the lda model, the coherence score and the coherence model will be
+        saved.
+        :param return_best_model: If true, the method will return the best found model and the number of topics of this
+        model.
+        :return: Number of topics for the best result and the model with the best result of the coherence score
+        """
         if return_best_model and not save_best_model:
             raise Exception("To return the best model, the parameter save_best_model has to be set to True.")
         self.coherence_dict = {}
@@ -203,6 +241,12 @@ class NlPipe:
             return best_topic_no, best_model
 
     def create_document_topic_df(self, model=None, no_topics=10):
+        """
+        Creates a dataframe containing the the result of the LDA model for each document. Will set the topic with the
+        highest share within the document as the dominant topic.
+        :param model: LDA model to use for the calculation of the topic distribution of each document.
+        :param no_topics: Number of topics in case no LDA model is provided.
+        """
         if model is None:
             self.create_lda_model(no_topics=no_topics)
         else:
@@ -224,6 +268,9 @@ class NlPipe:
 
     def plot_document_topic_distribution(self):
         #todo: log normalize
+        if self.result_df is None:
+            raise Exception("Please create the topic distribution dataframe using the 'create_document_topic_df' "
+                            "method")
         counter = Counter(self.result_df.dominant_topic)
         topic_dict = OrderedDict(sorted(counter.items(), key=lambda x: x[1], reverse=True))
         sns.barplot(x=list(topic_dict.values()), y=list(topic_dict.keys()), order=list(topic_dict.keys()), orient='h')
@@ -239,7 +286,15 @@ class NlPipe:
         self.word_topic_df = pd.DataFrame(topic_keywords, columns=[f"word_{x}" for x in range(no_words)])
 
     def evaluate_pyldavis(self, model=None):
+        """
+        Method for a visual evaluation of the LDA topic model using pyldavis.
+        :param model: LDA model that is to be evaluated. If 'None', it will use the last model that has been saved
+        within the class.
+        :return:
+        """
         if model is None:
+            if self.lda_model is None:
+                raise Exception("Please create a LDA model for evaluation before running this method.")
             model = self.lda_model
         panel = pyLDAvis.gensim.prepare(model, self.bag_of_words, self.id2word)
         pyLDAvis.show(panel)

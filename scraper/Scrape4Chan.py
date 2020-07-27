@@ -12,21 +12,20 @@ import threading
 
 
 class Scrape4chan:
-    #todo: init meta at beginning
-    #todo: scrape id's from archive files
-
     def __init__(self, collection_type, boards, start_time, end_time, path, stat_table, meta_stats, telegram_bot=None,
                  telegram_target=None, proxies=None, use_real_ip=True):
         """
-        :param collection_type: info if live or archived threads are to be collected
+        :param collection_type: info if live or archived threads are to be collected (depends on the board of 4chan)
         :param board: board of 4chan that will be scraped
         :param start_time: start time of collection
         :param end_time: end time of collection
-        :param path: path to the folder where to save the scraped files
+        :param path: path to the folder where to save the scraped files.
         :param stat_table: peewee table model for the per thread statistics.
         :param meta_stats: peewee table model for the global statistics.
         :param telegram_bot: Bot to send messages of exceptions via telegram
         :param telegram_target: ID to send messages to using the telegram bot
+        :param proxies: list of proxy servers to use.
+        :param use_real_ip: Using real ip for collection can be disabled if proxies are passed.
         """
         logging.basicConfig(filename=f'{path}log.log', filemode='a', format='%(asctime)s %(levelname)s: %(message)s',
                             level=logging.INFO)
@@ -74,7 +73,7 @@ class Scrape4chan:
                     self.last_threads[board] = {}
                 for thread in last_threads_from_db:
                     self.last_threads[thread.board][thread.thread_id] = thread.last_modified
-                logging.info(f"Continuing collection of last threads after restart. {self.get_last_thread_no} "
+                logging.info(f"Continuing collection of last threads after restart. {self.get_last_thread_no()} "
                              f"threads remaining.")
                 # load unfinished threads to last_threads
             else:
@@ -92,9 +91,16 @@ class Scrape4chan:
                      f'saving to {self.path}.')
 
     def send_msg(self, message):
+        """
+        :param message: String to send via the bot.
+        """
         self.bot.send_message(self.target, message)
 
     def get_last_thread_no(self):
+        """
+        Function to count the number of remaining threads before the collection is finished
+        :return: returns number of threads left to collect
+        """
         no = 0
         for board in self.boards:
             if self.collection_type == 'live':
@@ -104,6 +110,7 @@ class Scrape4chan:
         return no
 
     def get_link(self, link):
+        # todo: check if exception brings stop to whole program
         """
         Function to retrieve links. Will try five times to get the link.
         If not possible, will raise a exception after the fifths time.
@@ -139,8 +146,9 @@ class Scrape4chan:
     def setup_queue(self):
         # todo: check why new threads are added after the collection cycle is finished
         """
-        Function to get a dictionary of thread. Will also set up some stuff needed later
-        (for statistical reasons mainly).
+        Function to get a dictionary of thread. Will also set up the entries in the database/check if entries are
+        already present and add the threads to a queue that is used to download the threads according to their priority
+        (last threads in archive first).
         """
         self.old_thread_dict = deepcopy(self.thread_dict)
         self.thread_dict = {}
@@ -204,7 +212,7 @@ class Scrape4chan:
 
     def is_finished(self):
         """
-        Function to check if collection is finished.
+        Function to check if collection is finished and set the according state in the class.
         """
         if time.time() > self.end_time and not self.collection_ended:
             logging.info("Collection time over. Collecting already started threads.")
@@ -245,9 +253,9 @@ class Scrape4chan:
 
     def get_threads(self):
         """
-        Function to iterate over the thread ids and pass them over to the downloader.
+        Function to iterate over the thread ids and pass them over to the downloader. Will use threading to make use of
+        the proxies, if provided.
         """
-        # reversed in order to collect the threads that will be dead soon first.
         thread_counter = 0
         while not self.download_queue.empty():
             if not self.proxies:
@@ -285,7 +293,7 @@ class Scrape4chan:
 
     def download_thread(self, board, thread_id):
         """
-        Function for downloading the threads. Will pass files to function for saving files.
+        Function for downloading the threads. Will pass files to a function for saving the files.
         :param board: Name of the board to pass to the download and the save function.
         :param thread_id: Thread id to pass to the download and the save function.
         """
@@ -352,6 +360,9 @@ class Scrape4chan:
             logging.debug('Meta stats updated')
 
     def archive_threads(self):
+        """
+        Function to set the archived status of the collected threads in the database.
+        """
         archive_list = []
         for board in self.boards:
             if self.collection_type == 'live':
@@ -375,12 +386,23 @@ class Scrape4chan:
                 self.collection_ended = True
 
     def set_finished(self, board, thread_id):
+        """
+        Function to set the thread to finished in order not to collect them again.
+        :param board: Board of the thread.
+        :param thread_id: Id of the thread.
+        :return:
+        """
         finished = self.Stats.get((self.Stats.thread_id == thread_id) & (self.Stats.board == board))
         finished.finished = 1
         finished.save()
         logging.debug(f'Link {thread_id} set to "finished".')
 
     def collect(self):
+        """
+        Main function for the collection and continuous notification about the current state of the collection/potential
+        errors via the telegram bot, if it is provided.
+        :return:
+        """
         if time.time() < self.start_time:
             time.sleep(self.start_time - time.time())
         self.send_msg(f"Collection of threads started.")

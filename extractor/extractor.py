@@ -16,7 +16,20 @@ warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 
 
 class Extractor:
+    """
+    Class for the extraction/mining of the data contained in json files, either collected from the API by myself or
+    from the dataset of /pol/ thread, published with paper "Raiders of the Lost Kek".
+    """
     def __init__(self, in_path, out_path=None, mode="legacy", file_name=None, filter_cyclic=True):
+        """
+        :param in_path: Path of the files to be processed.
+        :param out_path: Path where to save the extracted data.
+        :param mode: Mode of the extraction, either "legacy" for the normal json files or "pol_set" if data from the
+        "Raiders of the Lost Kek" paper is to be extracted.
+        :param file_name: Name of the file if set to "pol_set". If not provided, the file name of the extracted data set
+        will be used.
+        :param filter_cyclic: If true, filter only threads where the post network in the thread is acyclic.
+        """
         self.in_path = in_path
         if out_path is None:
             self.out_path = self.in_path
@@ -50,6 +63,10 @@ class Extractor:
             raise Exception("File name of dataset not provided.")
 
     def create_file_dict(self):
+        """
+        Method to create a dictionary with information on all json files/threads in the input folder while also
+        considering the board of the thread.
+        """
         self.file_dict = defaultdict(list)
         for item in os.listdir(self.in_path):
             if not os.path.isfile(f"{self.in_path}/{item}"):
@@ -58,6 +75,9 @@ class Extractor:
                         self.file_dict[item].append(file)
 
     def extract(self):
+        """
+        Method to load the json files and set the according thread id/board within the class.
+        """
         self.stat_dict = {}
         self.post_list = []
         if self.mode == 'legacy':
@@ -69,7 +89,6 @@ class Extractor:
                     self.json_file = json.load(open(f"{self.in_path}/{board}/{thread_file}"))
                     self.thread_id = int(thread_file.split('.')[0])
                     self.extract_json()
-
         elif self.mode == 'pol_set':
             self.post_keys.append('extracted_poster_id')
             self.board = 'pol'
@@ -87,6 +106,12 @@ class Extractor:
                         self.extract_json()
 
     def extract_json(self):
+        #todo: add log instead of print
+        """
+        Method to extract the information that is contained in the json files, loaded by the method "extract". Will
+        save information on the statistics per thread and extract data from the text of each post. Will also save all
+        information provided per post by the API.
+        """
         for post in self.json_file['posts']:
             if post['no'] == self.thread_id:
                 self.stat_dict[post['no']] = {'board': self.board}
@@ -124,6 +149,9 @@ class Extractor:
             self.post_list.append(post_dict)
 
     def save_json(self):
+        """
+        Method to save the extracted information to a json file.
+        """
         if not self.stat_dict or not self.post_list:
             self.extract()
         with open(f"{self.out_path}/stats.json", "w") as outfile:
@@ -132,6 +160,10 @@ class Extractor:
             json.dump(self.post_list, outfile)
 
     def create_dfs(self):
+        """
+        Method to create a pandas dataframe for the extracted statistics and another one for information on the posts.
+        Will also detect the (dominant) language in each thread and save it to the statistics dataframe.
+        """
         if not self.stat_dict or not self.post_list:
             self.extract()
         self.stat_df = pd.DataFrame(data=self.stat_dict).transpose()
@@ -148,6 +180,13 @@ class Extractor:
         self.detect_lang()
 
     def strip_text(self, text):
+        """
+        Method to extract data from the text of a post, like the thread id, the quoted/green text and the text that is
+        written by the poster.
+        :param text: String of post to extract the data from.
+        :return: Returns the full post, mainly for readability, a list of the quotes within the post, the (post) ids
+        that are quoted, the text written by the user and a list of dead links.
+        """
         # todo: handle dead link class
         soup = bs(text, 'html.parser')
         full_string = ''
@@ -182,6 +221,11 @@ class Extractor:
         return full_string, quoted_list, quote_string, own_text, dead_link_list
 
     def generate_network(self, thread_id):
+        """
+        Method to create a network graph for the provided thread_id
+        :param thread_id: Id of the thread to create the network from.
+        :return: Returns a nx.DiGraph
+        """
         # initialize graph
         graph = nx.DiGraph()
         # iterate over DF filtered by the ID of the thread for which the graph is to be created
@@ -201,6 +245,13 @@ class Extractor:
         return graph
 
     def save_gexf(self, thread_id, path, save_cyclic=False):
+        #todo: remove print, set up log and exception.
+        """
+        Save the nx.DiGraph to a gexf file for further processing.
+        :param thread_id: Id of the thread to save, will be used to name the file.
+        :param path: Path to save the file to.
+        :param save_cyclic: Will determine if cyclic graphs are to be saved or not.
+        """
         if thread_id in list(self.stat_df.index):
             g = self.generate_network(thread_id)
             is_acyclic = nx.algorithms.dag.is_directed_acyclic_graph(g)
@@ -212,11 +263,15 @@ class Extractor:
                 self.stat_df.at[thread_id, 'is_acyclic'] = False
             else:
                 self.stat_df.at[thread_id, 'is_acyclic'] = False
-
         else:
             print('Thread id not found. Please check if the provided thread id is correct.')
 
     def generate_edge_list(self, thread_id=None):
+        """
+        Method to create a list of edges of a graph network of a given thread.
+        :param thread_id: Id of the thread to create the edge list for.
+        :return: List of all edges of the thread network.
+        """
         edge_list = []
         for index, row in self.post_df[self.post_df.thread_id == thread_id].iterrows():
             quotes_list = self.post_df.at[index, 'quoted_list']
@@ -229,6 +284,15 @@ class Extractor:
         return edge_list
 
     def create_gexfs(self, min_replies=275, max_replies=325, language='en'):
+        #todo: add option to not consider the language
+        # todo create gexf (b-mode or id-mode)
+        """
+        Method to save thread networks of all threads within the range of replies to a .gexf file. Will use the output
+        path of the class to save the files there.
+        :param min_replies: Minimum number of replies within a thread to be saved.
+        :param max_replies: Maximum number of replies within a thread to be saved.
+        :param language: Consider only threads with the given language.
+        """
         path = f"{self.out_path}/gexfs/{min_replies}-{max_replies}/"
         os.makedirs(path, exist_ok=True)
         thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) &
@@ -240,9 +304,19 @@ class Extractor:
         else:
             for thread_id in tqdm(thread_list, desc="Saving gexfs: "):
                 self.save_gexf(thread_id, path, save_cyclic=True)
-        # todo create gexf (b-mode or id-mode)
 
     def return_documents(self, text_column="own_text", min_replies=275, max_replies=325, language='en'):
+        #todo: add option to not consider the language
+        """
+        Method to return a list of strings where each string is the text posted in a thread. Can consider different
+        texts, e.g. only the quotes, only the text written by a user or the full posts.
+        :param text_column: Column of text (quoted text, text written by the user or full post).
+        :param min_replies: Minimum number of replies within a thread for a thread to be considered.
+        :param max_replies: Maximum number of replies within a thread for a thread to be considered.
+        :param language: Dominant language of a thread to be considered.
+        :return: Returns a list of strings where each string is the text of a thread and a list of the thread ids,
+        matching the documents.
+        """
         if not isinstance(self.post_df, pd.DataFrame) or not isinstance(self.stat_df, pd.DataFrame):
             self.create_dfs()
         text_list = []
@@ -262,6 +336,9 @@ class Extractor:
         return text_list, thread_list
 
     def detect_lang(self):
+        """
+        Method to detect the languages of each thread in the collection.
+        """
         languages = []
         for thread_id in tqdm(self.stat_df.index, desc='Detecting languages: '):
             try:
@@ -272,12 +349,20 @@ class Extractor:
         self.stat_df['language'] = languages
 
     def save_df_pickles(self, path=None):
+        """
+        Method to save the pandas dataframes with the extracted information to a pickle file.
+        :param path: Path to save the pickels to. If none, the output path of the class will be used.
+        """
         if path is None:
             path = self.out_path
         self.stat_df.to_pickle(f"{path}stat_df.pkl")
         self.post_df.to_pickle(f"{path}post_df.pkl")
 
     def save_df_csvs(self, path=None):
+        """
+        Method to save the pandas dataframes with the extracted information to a csv file.
+        :param path: Path to save the csv to. If none, the output path of the class will be used.
+        """
         if path is None:
             path = self.out_path
         self.stat_df.to_csv(f"{path}stat_df.csv")
