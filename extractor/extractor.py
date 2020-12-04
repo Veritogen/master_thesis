@@ -39,6 +39,7 @@ class Extractor:
         self.filter_cyclic = None
         self.loaded = False
         self.save_com = None
+        self.counter = 0
 
     def load(self, in_path=None, out_path=None, mode="legacy", file_name=None, debug=False):
         """
@@ -106,7 +107,7 @@ class Extractor:
                               'spoiler']
             logging.debug("Extracting all possible information from posts.")
         else:
-            self.post_keys = ['time', 'resto',]
+            self.post_keys = ['no', 'time', 'resto']
             logging.debug("Extracting limited set of information from posts.")
         self.save_com = save_com
         self.filter_cyclic = filter_cyclic
@@ -139,6 +140,14 @@ class Extractor:
                 self.json_file = json.load(open(f"{self.in_path}/{board}/{thread_file}"))
                 self.thread_id = int(thread_file.split('.')[0])
                 self.extract_json()
+                if self.counter > 10000:
+                    temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
+                    self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
+                    self.post_list = []
+                    self.counter = 0
+        temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
+        self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
+
 
     def extract_pol_set(self):
         self.post_keys.append('extracted_poster_id')
@@ -149,12 +158,26 @@ class Extractor:
                     self.json_file = json.loads(line)
                     self.thread_id = self.json_file['posts'][0]['no']
                     self.extract_json()
+                    if self.counter > 10000:
+                        temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
+                        self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
+                        self.post_list = []
+                        self.counter = 0
+            temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
+            self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
         else:
             with open(f"{self.in_path}/{self.file_name}") as f:
                 for line in tqdm(f, desc='Threads'):
                     self.json_file = json.loads(line)
                     self.thread_id = self.json_file['posts'][0]['no']
                     self.extract_json()
+                    if self.counter > 10000:
+                        temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
+                        self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
+                        self.post_list = []
+                        self.counter = 0
+            temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
+            self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
 
     def extract_json(self):
         #todo: add log instead of print
@@ -201,7 +224,8 @@ class Extractor:
                 temp_post_dict = {}
                 for key in self.post_df.columns:
                     temp_post_dict[key] = post_dict[key]
-                self.post_df.loc[int(post['no'])] = temp_post_dict
+                self.post_list.append(temp_post_dict)
+                self.counter += 1
             except Exception as e:
                 print(self.post_df.columns, post_dict.keys(), e)
 
