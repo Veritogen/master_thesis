@@ -51,7 +51,7 @@ class Extractor:
         if in_path:
             self.in_path = in_path
         else:
-            self.in_path = os.path.dirname(os.getcwd())
+            self.in_path = os.getcwd()
         if out_path is None:
             self.out_path = self.in_path
         else:
@@ -118,7 +118,7 @@ class Extractor:
                         self.thread_id = self.json_file['posts'][0]['no']
                         self.extract_json()
             else:
-                with open(f"{self.in_path}{self.file_name}") as f:
+                with open(f"{self.in_path}/{self.file_name}") as f:
                     for line in tqdm(f, desc='Threads'):
                         self.json_file = json.loads(line)
                         self.thread_id = self.json_file['posts'][0]['no']
