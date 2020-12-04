@@ -39,8 +39,7 @@ class Extractor:
         self.filter_cyclic = None
         self.loaded = False
 
-    def load(self, in_path=None, out_path=None, mode="legacy", file_name=None, filter_cyclic=True,
-             complete_extraction=False):
+    def load(self, in_path=None, out_path=None, mode="legacy", file_name=None):
         """
         :param in_path: Path of the files to be processed.
         :param out_path: Path where to save the extracted data.
@@ -48,14 +47,11 @@ class Extractor:
         "Raiders of the Lost Kek" paper is to be extracted.
         :param file_name: Name of the file if set to "pol_set". If not provided, the file name of the extracted data set
         will be used.
-        :param filter_cyclic: If true, filter only threads where the post network in the thread is acyclic.
-        :param complete_extraction: If true, all information provided by the 4chan API will be extracted, else just
-        a limited set is used
         """
         if in_path:
             self.in_path = in_path
         else:
-            self.in_path = os.path.dirname(os.path.abspath(__file__))
+            self.in_path = os.path.dirname(os.getcwd())
         if out_path is None:
             self.out_path = self.in_path
         else:
@@ -63,19 +59,6 @@ class Extractor:
             os.makedirs(f"{self.out_path}", exist_ok=True)
         self.file_name = file_name
         self.mode = mode
-        self.relevant_stats = ['no', 'semantic_url', 'time', 'archived_on', 'replies', 'images', 'bumplimit',
-                               'imagelimit']
-        self.ignore_keys = {'semantic_url', 'archived_on', 'replies', 'images', 'bumplimit',
-                            'imagelimit', 'closed', 'archived'}
-        if complete_extraction:
-            self.post_keys = ['no', 'now', 'name', 'sub', 'com', 'filename', 'ext', 'w', 'h', 'tn_w', 'tn_h', 'tim',
-                              'time', 'md5', 'fsize', 'resto', 'trip', 'filedeleted', 'capcode', 'since4pass',
-                              'country', 'country_name', 'tail_size', 'troll_country', 'm_img', 'custom_spoiler',
-                              'spoiler']
-        else:
-            self.post_keys = ['no', 'now', 'name', 'com', 'time', 'md5', 'resto', 'trip', 'filedeleted', 'country',
-                              'country_name', 'troll_country']
-        self.filter_cyclic = filter_cyclic
         if self.mode == "pol_set" and self.file_name is None:
             raise Exception("File name of dataset not provided.")
         self.loaded = True
@@ -92,12 +75,28 @@ class Extractor:
                     if file.endswith(".json"):
                         self.file_dict[item].append(file)
 
-    def extract(self):
+    def extract(self, filter_cyclic=True, complete_extraction=False):
         """
         Method to load the json files and set the according thread id/board within the class.
+        :param filter_cyclic: If true, filter only threads where the post network in the thread is acyclic.
+        :param complete_extraction: If true, all information provided by the 4chan API will be extracted, else just
+        a limited set is used
         """
         if not self.loaded:
             raise Exception("Can't extract. No files loaded yet. Please use 'load' method to load files")
+        self.relevant_stats = ['no', 'semantic_url', 'time', 'archived_on', 'replies', 'images', 'bumplimit',
+                               'imagelimit']
+        self.ignore_keys = {'semantic_url', 'archived_on', 'replies', 'images', 'bumplimit',
+                            'imagelimit', 'closed', 'archived'}
+        if complete_extraction:
+            self.post_keys = ['no', 'now', 'name', 'sub', 'com', 'filename', 'ext', 'w', 'h', 'tn_w', 'tn_h', 'tim',
+                              'time', 'md5', 'fsize', 'resto', 'trip', 'filedeleted', 'capcode', 'since4pass',
+                              'country', 'country_name', 'tail_size', 'troll_country', 'm_img', 'custom_spoiler',
+                              'spoiler']
+        else:
+            self.post_keys = ['no', 'now', 'name', 'com', 'time', 'md5', 'resto', 'trip', 'filedeleted', 'country',
+                              'country_name', 'troll_country']
+        self.filter_cyclic = filter_cyclic
         self.stat_dict = {}
         self.post_list = []
         if self.mode == 'legacy':
