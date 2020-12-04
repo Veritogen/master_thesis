@@ -175,6 +175,10 @@ class NlPipe:
             self.id2word.filter_extremes(no_below=min_df, no_above=max_df, keep_n=keep_n, keep_tokens=keep_tokens)
         self.bag_of_words = [self.id2word.doc2bow(doc) for doc in self.preprocessed_docs]
 
+    def create_tfidf(self):
+        pass
+
+
     def create_lda_model(self, no_topics=10, random_state=42, alpha='symmetric'):
         """
         :param no_topics: Number of topics that are to be explored by lda model

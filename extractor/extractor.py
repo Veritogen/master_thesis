@@ -12,8 +12,8 @@ from langdetect import detect
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 
 
-# todo: setup logger
-
+#todo: setup logger
+#todo: check for proper extraction (see chris project)
 
 class Extractor:
     """
