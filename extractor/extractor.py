@@ -55,7 +55,7 @@ class Extractor:
         if in_path:
             self.in_path = in_path
         else:
-            os.path.dirname(os.path.abspath(__file__))
+            self.in_path = os.path.dirname(os.path.abspath(__file__))
         if out_path is None:
             self.out_path = self.in_path
         else:
@@ -96,6 +96,8 @@ class Extractor:
         """
         Method to load the json files and set the according thread id/board within the class.
         """
+        if not self.loaded:
+            raise Exception("Can't extract. No files loaded yet. Please use 'load' method to load files")
         self.stat_dict = {}
         self.post_list = []
         if self.mode == 'legacy':
