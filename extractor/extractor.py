@@ -20,7 +20,27 @@ class Extractor:
     Class for the extraction/mining of the data contained in json files, either collected from the API by myself or
     from the dataset of /pol/ thread, published with paper "Raiders of the Lost Kek".
     """
-    def __init__(self, in_path, out_path=None, mode="legacy", file_name=None, filter_cyclic=True):
+    def __init__(self):
+        self.in_path = None
+        self.out_path = None
+        self.file_name = None
+        self.mode = None
+        self.file_dict = None
+        self.stat_dict = None
+        self.post_list = None
+        self.relevant_stats = None
+        self.ignore_keys = None
+        self.post_keys = None
+        self.stat_df = None
+        self.post_df = None
+        self.board = None
+        self.thread_id = None
+        self.json_file = None
+        self.filter_cyclic = None
+        self.loaded = False
+
+    def load(self, in_path, out_path=None, mode="legacy", file_name=None, filter_cyclic=True,
+             complete_extraction=False):
         """
         :param in_path: Path of the files to be processed.
         :param out_path: Path where to save the extracted data.
@@ -29,6 +49,8 @@ class Extractor:
         :param file_name: Name of the file if set to "pol_set". If not provided, the file name of the extracted data set
         will be used.
         :param filter_cyclic: If true, filter only threads where the post network in the thread is acyclic.
+        :param complete_extraction: If true, all information provided by the 4chan API will be extracted, else just
+        a limited set is used
         """
         self.in_path = in_path
         if out_path is None:
@@ -38,29 +60,22 @@ class Extractor:
             os.makedirs(f"{self.out_path}", exist_ok=True)
         self.file_name = file_name
         self.mode = mode
-        self.file_dict = None
-        self.stat_dict = None
-        self.post_list = None
         self.relevant_stats = ['no', 'semantic_url', 'time', 'archived_on', 'replies', 'images', 'bumplimit',
                                'imagelimit']
         self.ignore_keys = {'semantic_url', 'archived_on', 'replies', 'images', 'bumplimit',
                             'imagelimit', 'closed', 'archived'}
-        ''' 
-        List of all possible information, shortened in order to save memory.
-        self.post_keys = ['no', 'now', 'name', 'sub', 'com', 'filename', 'ext', 'w', 'h', 'tn_w', 'tn_h', 'tim', 'time',
-                          'md5', 'fsize', 'resto', 'trip', 'filedeleted', 'capcode', 'since4pass', 'country',
-                          'country_name', 'tail_size', 'troll_country', 'm_img', 'custom_spoiler', 'spoiler'] 
-                          '''
-        self.post_keys = ['no', 'now', 'name', 'com', 'time', 'md5', 'resto', 'trip', 'filedeleted', 'country',
-                          'country_name', 'troll_country']
-        self.stat_df = None
-        self.post_df = None
-        self.board = None
-        self.thread_id = None
-        self.json_file = None
+        if complete_extraction:
+            self.post_keys = ['no', 'now', 'name', 'sub', 'com', 'filename', 'ext', 'w', 'h', 'tn_w', 'tn_h', 'tim',
+                              'time', 'md5', 'fsize', 'resto', 'trip', 'filedeleted', 'capcode', 'since4pass',
+                              'country', 'country_name', 'tail_size', 'troll_country', 'm_img', 'custom_spoiler',
+                              'spoiler']
+        else:
+            self.post_keys = ['no', 'now', 'name', 'com', 'time', 'md5', 'resto', 'trip', 'filedeleted', 'country',
+                              'country_name', 'troll_country']
         self.filter_cyclic = filter_cyclic
         if self.mode == "pol_set" and self.file_name is None:
             raise Exception("File name of dataset not provided.")
+        self.loaded = True
 
     def create_file_dict(self):
         """
