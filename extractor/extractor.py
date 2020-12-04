@@ -38,8 +38,9 @@ class Extractor:
         self.json_file = None
         self.filter_cyclic = None
         self.loaded = False
+        self.save_com = None
 
-    def load(self, in_path=None, out_path=None, mode="legacy", file_name=None):
+    def load(self, in_path=None, out_path=None, mode="legacy", file_name=None, debug=False):
         """
         :param in_path: Path of the files to be processed.
         :param out_path: Path where to save the extracted data.
@@ -47,6 +48,7 @@ class Extractor:
         "Raiders of the Lost Kek" paper is to be extracted.
         :param file_name: Name of the file if set to "pol_set". If not provided, the file name of the extracted data set
         will be used.
+        :param debug: Can be used to allow debugging, disabled by default.
         """
         if in_path:
             self.in_path = in_path
@@ -61,7 +63,12 @@ class Extractor:
         self.mode = mode
         if self.mode == "pol_set" and self.file_name is None:
             raise Exception("File name of dataset not provided.")
+        logging.basicConfig(filename=f'{out_path}/extraction_log.log', filemode='a',
+                            format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG)
+        if not debug:
+            logging.getLogger().setLevel(logging.INFO)
         self.loaded = True
+        logging.info("Files loaded.")
 
     def create_file_dict(self):
         """
@@ -74,8 +81,10 @@ class Extractor:
                 for file in os.listdir(f"{self.in_path}/{item}"):
                     if file.endswith(".json"):
                         self.file_dict[item].append(file)
+        logging.debug("File dict created.")
 
-    def extract(self, filter_cyclic=True, complete_extraction=False):
+    def extract(self, filter_cyclic=True, complete_extraction=False, save_com=False,
+                save_full_text=True, save_own_text=False, save_quote_text=False,):
         """
         Method to load the json files and set the according thread id/board within the class.
         :param filter_cyclic: If true, filter only threads where the post network in the thread is acyclic.
@@ -83,8 +92,10 @@ class Extractor:
         a limited set is used
         """
         if not self.loaded:
+            logging.exception("Can't extract. No files loaded yet. Please use 'load' method to load files")
             raise Exception("Can't extract. No files loaded yet. Please use 'load' method to load files")
-        self.relevant_stats = ['no', 'semantic_url', 'time', 'archived_on', 'replies', 'images', 'bumplimit',
+
+        self.relevant_stats = ['board', 'semantic_url', 'time', 'archived_on', 'replies', 'images', 'bumplimit',
                                'imagelimit']
         self.ignore_keys = {'semantic_url', 'archived_on', 'replies', 'images', 'bumplimit',
                             'imagelimit', 'closed', 'archived'}
@@ -93,36 +104,57 @@ class Extractor:
                               'time', 'md5', 'fsize', 'resto', 'trip', 'filedeleted', 'capcode', 'since4pass',
                               'country', 'country_name', 'tail_size', 'troll_country', 'm_img', 'custom_spoiler',
                               'spoiler']
+            logging.debug("Extracting all possible information from posts.")
         else:
-            self.post_keys = ['no', 'now', 'name', 'com', 'time', 'md5', 'resto', 'trip', 'filedeleted', 'country',
-                              'country_name', 'troll_country']
+            self.post_keys = ['time', 'resto',]
+            logging.debug("Extracting limited set of information from posts.")
+        self.save_com = save_com
         self.filter_cyclic = filter_cyclic
         self.stat_dict = {}
         self.post_list = []
+        self.stat_df = pd.DataFrame(columns=self.relevant_stats)
+        post_columns = self.post_keys[:]
+        if save_full_text:
+            post_columns.append('full_string')
+        if save_own_text:
+            post_columns.append('own_text')
+        if save_quote_text:
+            post_columns.append("quote_string")
+        for column in ['thread_id', 'quoted_list']:
+            post_columns.append(column)
+        self.post_df = pd.DataFrame(columns=post_columns)
         if self.mode == 'legacy':
-            if not self.file_dict:
-                self.create_file_dict()
-            for board in tqdm(self.file_dict.keys(), desc='Board'):
-                self.board = board
-                for thread_file in tqdm(self.file_dict[board], desc='Threads'):
-                    self.json_file = json.load(open(f"{self.in_path}/{board}/{thread_file}"))
-                    self.thread_id = int(thread_file.split('.')[0])
+            logging.debug("Extracting information from files collected from 4chan API.")
+            self.extract_legacy()
+        if self.mode == 'pol_set':
+            logging.debug("Extracting information from pol dataset.")
+            self.extract_pol_set()
+
+    def extract_legacy(self):
+        if not self.file_dict:
+            self.create_file_dict()
+        for board in tqdm(self.file_dict.keys(), desc='Board'):
+            self.board = board
+            for thread_file in tqdm(self.file_dict[board], desc='Threads'):
+                self.json_file = json.load(open(f"{self.in_path}/{board}/{thread_file}"))
+                self.thread_id = int(thread_file.split('.')[0])
+                self.extract_json()
+
+    def extract_pol_set(self):
+        self.post_keys.append('extracted_poster_id')
+        self.board = 'pol'
+        if self.file_name is None:
+            with open(f"{self.in_path}pol_062016-112019_labeled.ndjson") as f:
+                for line in tqdm(f, desc='Threads'):
+                    self.json_file = json.loads(line)
+                    self.thread_id = self.json_file['posts'][0]['no']
                     self.extract_json()
-        elif self.mode == 'pol_set':
-            self.post_keys.append('extracted_poster_id')
-            self.board = 'pol'
-            if self.file_name is None:
-                with open(f"{self.in_path}pol_062016-112019_labeled.ndjson") as f:
-                    for line in tqdm(f, desc='Threads'):
-                        self.json_file = json.loads(line)
-                        self.thread_id = self.json_file['posts'][0]['no']
-                        self.extract_json()
-            else:
-                with open(f"{self.in_path}/{self.file_name}") as f:
-                    for line in tqdm(f, desc='Threads'):
-                        self.json_file = json.loads(line)
-                        self.thread_id = self.json_file['posts'][0]['no']
-                        self.extract_json()
+        else:
+            with open(f"{self.in_path}/{self.file_name}") as f:
+                for line in tqdm(f, desc='Threads'):
+                    self.json_file = json.loads(line)
+                    self.thread_id = self.json_file['posts'][0]['no']
+                    self.extract_json()
 
     def extract_json(self):
         #todo: add log instead of print
@@ -133,12 +165,15 @@ class Extractor:
         """
         for post in self.json_file['posts']:
             if post['no'] == self.thread_id:
-                self.stat_dict[post['no']] = {'board': self.board}
+                stat_temp = {'board': self.board}
                 for rel_stat in self.relevant_stats:
-                    try:
-                        self.stat_dict[post['no']][rel_stat] = post[rel_stat]
-                    except KeyError:
-                        self.stat_dict[post['no']][rel_stat] = 'MISSING'
+                    if rel_stat != 'board':
+                        try:
+                            stat_temp[rel_stat] = post[rel_stat]
+                        except KeyError:
+                            logging.debug(f"Missing information for {rel_stat} in thread no {self.thread_id}")
+                            stat_temp[rel_stat] = 'MISSING'
+                self.stat_df.loc[self.thread_id] = stat_temp
             post_dict = {'thread_id': self.thread_id,
                          'board': self.board}
             for key in self.post_keys:
@@ -146,26 +181,29 @@ class Extractor:
                     post_dict[key] = post[key]
                 else:
                     post_dict[key] = None
-                if key == 'com':
+                if 'com' in post.keys():
+                    if self.save_com:
+                        post_dict['com'] = post['com']
                     try:
-                        if key in post.keys():
-                            full_string, quoted_list, quote_string, own_text, dead_links = \
-                                self.strip_text(post[key])
-                        # if no comment is written, add emtpy string
-                        else:
-                            full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text("")
-                            # todo: log missing text
-                        post_dict['full_string'] = full_string
-                        post_dict['quoted_list'] = quoted_list
-                        post_dict['quote_string'] = quote_string
-                        post_dict['own_text'] = own_text
-                        post_dict['dead_links'] = dead_links
-                    except:
-                        print(f"board: {self.board}, Thread: {self.thread_id}, Post: {post['no']}"
-                              f" Post keys: {post.keys()}, Full Post: {post}")
-                        # todo: add board and Id to log
-                        # logging.ex(post, post_dict)
-            self.post_list.append(post_dict)
+                        full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text(post['com'])
+                    except Exception as e:
+                        logging.error(f"Exception while extracting post {post['no']} in thread {self.thread_id}. {e}")
+                else:
+                    if self.save_com:
+                        post_dict['com'] = ""
+                    full_string, quoted_list, quote_string, own_text, dead_links = "", [], "", "", []
+                post_dict['full_string'] = full_string
+                post_dict['quoted_list'] = quoted_list
+                post_dict['quote_string'] = quote_string
+                post_dict['own_text'] = own_text
+                post_dict['dead_links'] = dead_links
+            try:
+                temp_post_dict = {}
+                for key in self.post_df.columns:
+                    temp_post_dict[key] = post_dict[key]
+                self.post_df.loc[int(post['no'])] = temp_post_dict
+            except Exception as e:
+                print(self.post_df.columns, post_dict.keys(), e)
 
     def save_json(self):
         """
