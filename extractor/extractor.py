@@ -39,7 +39,7 @@ class Extractor:
         self.filter_cyclic = None
         self.loaded = False
 
-    def load(self, in_path, out_path=None, mode="legacy", file_name=None, filter_cyclic=True,
+    def load(self, in_path=None, out_path=None, mode="legacy", file_name=None, filter_cyclic=True,
              complete_extraction=False):
         """
         :param in_path: Path of the files to be processed.
@@ -52,7 +52,10 @@ class Extractor:
         :param complete_extraction: If true, all information provided by the 4chan API will be extracted, else just
         a limited set is used
         """
-        self.in_path = in_path
+        if in_path:
+            self.in_path = in_path
+        else:
+            os.path.dirname(os.path.abspath(__file__))
         if out_path is None:
             self.out_path = self.in_path
         else:
