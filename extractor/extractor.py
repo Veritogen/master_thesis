@@ -43,7 +43,9 @@ class Extractor:
         self.save_com = None
         self.counter = 0
         self.post_df_columns = None
-        self.ThreadTuple = namedtuple('ThreadTuple', ['board', 'thread_id', 'thread_file'])
+        self.ThreadTuple = namedtuple('ThreadTuple', ['board', 'thread_id', 'thread_dict'])
+        self.PostTuple = namedtuple('PostTuple', ['full_string', 'quoted_list', 'own_text', 'quote_string',
+                                                  'dead_link_list'])
 
     def load(self, in_path=None, out_path=None, mode="legacy", file_name=None, debug=False):
         """
@@ -65,6 +67,10 @@ class Extractor:
             self.out_path = out_path
             os.makedirs(f"{self.out_path}", exist_ok=True)
         self.file_name = file_name
+        if mode not in ['pol_set', 'legacy']:
+            logging.error("No valid information for mode was provided. Please specify either 'legacy' or 'pol_set', "
+                          "depending on the input data.")
+            raise Exception("No valid mode for extraction was provided.")
         self.mode = mode
         if self.mode == "pol_set" and self.file_name is None:
             raise Exception("File name of dataset not provided.")
@@ -89,7 +95,7 @@ class Extractor:
         logging.debug("File dict created.")
 
     def extract(self, filter_cyclic=True, complete_extraction=False, save_com=False,
-                save_full_text=True, save_own_text=False, save_quote_text=False,):
+                save_full_text=True, save_own_text=False, save_quote_text=False, batch_size=10000):
         """
         Method to load the json files and set the according thread id/board within the class.
         :param filter_cyclic: If true, filter only threads where the post network in the thread is acyclic.
@@ -136,67 +142,57 @@ class Extractor:
         self.post_df = pd.DataFrame(columns=post_columns)
         if self.mode == 'legacy':
             logging.debug("Extracting information from files collected from 4chan API.")
-            self.load_legacy()
         if self.mode == 'pol_set':
             logging.debug("Extracting information from pol dataset.")
-            self.load_pol_set()
-
-    def load_legacy(self):
-        if not self.file_dict:
-            self.create_file_dict()
-        for board in tqdm(self.file_dict.keys(), desc='Board'):
-            self.board = board
-            for thread_file in tqdm(self.file_dict[board], desc='Threads'):
-                self.json_file = json.load(open(f"{self.in_path}/{board}/{thread_file}"))
-                self.thread_id = int(thread_file.split('.')[0])
-                self.extract_json()
-                if self.counter > 10000:
-                    temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
-                    self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
-                    self.post_list = []
-                    self.counter = 0
+        for thread_tuple in tqdm(self.thread_generator()):
+            self.extract_json(thread_tuple)
+            if self.counter > batch_size:
+                temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
+                self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
+                self.post_list = []
+                self.counter = 0
         temp_df = pd.DataFrame(columns=self.post_df_columns, data=self.post_list)
         self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
 
-    def load_pol_set(self):
-        self.post_keys.append('extracted_poster_id')
-        self.board = 'pol'
-        with open(f"{self.in_path}/pol_062016-112019_labeled.ndjson" if self.file_name is None
-                  else f"{self.in_path}/{self.file_name}") as f:
-            for line in tqdm(f, desc='Threads'):
-                self.json_file = json.loads(line)
-                self.thread_id = self.json_file['posts'][0]['no']
-                self.extract_json()
-                if self.counter > 10000:
-                    temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
-                    self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
-                    self.post_list = []
-                    self.counter = 0
-            #self.post_df = pd.DataFrame(columns=self.post_df_columns, data=self.post_list)
-        temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
-        self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
+    def thread_generator(self):
+        if self.mode == 'pol_set':
+            self.post_keys.append('extracted_poster_id')
+            board = 'pol'
+            with open(f"{self.in_path}/pol_062016-112019_labeled.ndjson" if self.file_name is None
+                      else f"{self.in_path}/{self.file_name}") as f:
+                for line in f:
+                    json_file = json.loads(line)
+                    thread_id = int(json_file['posts'][0]['no'])
+                    yield self.ThreadTuple(board=board, thread_id=thread_id, thread_dict=json_file)
+        elif self.mode == 'legacy':
+            if not self.file_dict:
+                self.create_file_dict()
+            for board in self.file_dict.keys():
+                for thread_file in self.file_dict[board]:
+                    json_file = json.load(open(f"{self.in_path}/{board}/{thread_file}"))
+                    thread_id = int(thread_file.split('.')[0])
+                    yield self.ThreadTuple(board=board, thread_id=thread_id, thread_dict=json_file)
 
-
-    def extract_json(self):
+    def extract_json(self, thread_tuple):
         #todo: add log instead of print
         """
         Method to extract the information that is contained in the json files, loaded by the method "extract". Will
         save information on the statistics per thread and extract data from the text of each post. Will also save all
         information provided per post by the API.
         """
-        for post in self.json_file['posts']:
-            if post['no'] == self.thread_id:
-                stat_temp = {'board': self.board}
+        for post in thread_tuple.thread_dict['posts']:
+            if post['no'] == thread_tuple.thread_id:
+                stat_temp = {'board': thread_tuple.board}
                 for rel_stat in self.relevant_stats:
                     if rel_stat != 'board':
                         try:
                             stat_temp[rel_stat] = post[rel_stat]
                         except KeyError:
-                            logging.debug(f"Missing information for {rel_stat} in thread no {self.thread_id}")
+                            logging.debug(f"Missing information for {rel_stat} in thread no {thread_tuple.thread_id}")
                             stat_temp[rel_stat] = 'MISSING'
-                self.stat_df.loc[self.thread_id] = stat_temp
-            post_dict = {'thread_id': self.thread_id,
-                         'board': self.board}
+                self.stat_df.loc[thread_tuple.thread_id] = stat_temp
+            post_dict = {'thread_id': thread_tuple.thread_id,
+                         'board': thread_tuple.board}
             for key in self.post_keys:
                 if key in post.keys():
                     post_dict[key] = post[key]
@@ -210,7 +206,8 @@ class Extractor:
                         #self.strip_text_new(post['com'])
                         pass
                     except Exception as e:
-                        logging.error(f"Exception while extracting post {post['no']} in thread {self.thread_id}. {e}")
+                        logging.error(f"Exception while extracting post {post['no']} in thread {thread_tuple.thread_id}"
+                                      f". {e}")
                 else:
                     if self.save_com:
                         post_dict['com'] = ""
@@ -231,7 +228,6 @@ class Extractor:
             except Exception as e:
                 print(e)
                 #print(self.post_df.columns, post_dict.keys(), e)
-
 
     def save_json(self):
         """
@@ -320,6 +316,7 @@ class Extractor:
                 # full_string = full_string +
                 pass
             elif item.name == 'span':
+                #todo: handle deadlinks
                 quote_string = quote_string + item.text
             elif item.name == 'a':
                 quote_id = item.text.strip(">>")
@@ -328,7 +325,8 @@ class Extractor:
             else:
                 print(type(item), item.name, self.thread_id)
                 #raise Exception("unknow soup element")
-        return full_string, quoted_list, own_text, quote_string, dead_link_list
+        return self.PostTuple(full_string=full_string, quoted_list=quoted_list, own_text=own_text,
+                              quote_string=quote_string, dead_link_list=dead_link_list)
 
         """        text = text.replace('</br>', '\n')
                 soup = bs(text, 'html.parser')
