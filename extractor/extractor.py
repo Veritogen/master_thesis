@@ -3,7 +3,7 @@ from collections import defaultdict
 import json
 from tqdm import tqdm
 import pandas as pd
-#import swifter
+import swifter
 from bs4 import BeautifulSoup as bs
 import networkx as nx
 import warnings
@@ -36,7 +36,6 @@ class Extractor:
         self.stat_df = None
         self.post_df = None
         self.board = None
-        self.thread_id = None
         self.json_file = None
         self.filter_cyclic = None
         self.loaded = False
@@ -44,6 +43,7 @@ class Extractor:
         self.counter = 0
         self.post_df_columns = None
         self.ThreadTuple = namedtuple('ThreadTuple', ['board', 'thread_id', 'thread_dict'])
+        self.extract_from_post = ['quoted_list']
         self.PostTuple = namedtuple('PostTuple', ['full_string', 'quoted_list', 'own_text', 'quote_string',
                                                   'dead_link_list'])
 
@@ -96,7 +96,8 @@ class Extractor:
         logging.debug("File dict created.")
 
     def extract(self, filter_cyclic=True, complete_extraction=False, save_com=False,
-                save_full_text=True, save_own_text=False, save_quote_text=False, batch_size=10000):
+                save_full_text=True, save_own_text=False, save_quote_text=False,
+                save_dead_links=False, batch_size=10000):
         """
         Method to load the json files and set the according thread id/board within the class.
         :param filter_cyclic: If true, filter only threads where the post network in the thread is acyclic.
@@ -129,10 +130,16 @@ class Extractor:
             post_columns.append('com')
         if save_full_text:
             post_columns.append('full_string')
+            self.extract_from_post.append('full_string')
         if save_own_text:
             post_columns.append('own_text')
+            self.extract_from_post.append('own_text')
         if save_quote_text:
-            post_columns.append("quote_string")
+            post_columns.append('quote_string')
+            self.extract_from_post.append('quote_string')
+        if save_dead_links:
+            post_columns.append('dead_links')
+            self.extract_from_post.append('dead_links')
         #todo: change back
         #for column in ['thread_id', 'quoted_list']:
         for column in ['thread_id']:
@@ -159,6 +166,8 @@ class Extractor:
         self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True)
         temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
         self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True)
+        #self.post_df[self.extract_from_post] = self.post_df.swifter.apply(lambda x: self.strip_text_new(x['com']),
+        #                                                                  result_type='expand', axis=1)
 
     def thread_generator(self):
         if self.mode == 'pol_set':
@@ -329,10 +338,11 @@ class Extractor:
                 if quote_id.isdigit():
                     quoted_list.append(int(quote_id))
             else:
-                print(type(item), item.name, self.thread_id)
+                print(type(item), item.name, item)
                 #raise Exception("unknow soup element")
-        return self.PostTuple(full_string=full_string, quoted_list=quoted_list, own_text=own_text,
+        post_tuple = self.PostTuple(full_string=full_string, quoted_list=quoted_list, own_text=own_text,
                               quote_string=quote_string, dead_link_list=dead_link_list)
+        return [post_tuple.__getattribute__(post_info) for post_info in self.extract_from_post]
 
         """        text = text.replace('</br>', '\n')
                 soup = bs(text, 'html.parser')
