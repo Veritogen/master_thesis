@@ -3,7 +3,7 @@ from collections import defaultdict
 import json
 from tqdm import tqdm
 import pandas as pd
-import swifter
+#import swifter
 from bs4 import BeautifulSoup as bs
 import networkx as nx
 import warnings
@@ -28,7 +28,7 @@ class Extractor:
         self.file_name = None
         self.mode = None
         self.file_dict = None
-        self.stat_dict = None
+        self.stat_list = None
         self.post_list = None
         self.relevant_stats = None
         self.ignore_keys = None
@@ -73,6 +73,7 @@ class Extractor:
             raise Exception("No valid mode for extraction was provided.")
         self.mode = mode
         if self.mode == "pol_set" and self.file_name is None:
+            logging.exception("Couldn't load data because no file was specified for pol extraction.")
             raise Exception("File name of dataset not provided.")
         logging.basicConfig(filename=f'{out_path}/extraction_log.log', filemode='a',
                             format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG)
@@ -106,8 +107,8 @@ class Extractor:
             logging.exception("Can't extract. No files loaded yet. Please use 'load' method to load files")
             raise Exception("Can't extract. No files loaded yet. Please use 'load' method to load files")
 
-        self.relevant_stats = ['board', 'semantic_url', 'time', 'archived_on', 'replies', 'images', 'bumplimit',
-                               'imagelimit']
+        self.relevant_stats = ['thread_id', 'board', 'semantic_url', 'time', 'archived_on', 'replies', 'images',
+                               'bumplimit', 'imagelimit']
         self.ignore_keys = {'semantic_url', 'archived_on', 'replies', 'images', 'bumplimit',
                             'imagelimit', 'closed', 'archived'}
         if complete_extraction:
@@ -121,9 +122,8 @@ class Extractor:
             logging.debug("Extracting limited set of information from posts.")
         self.save_com = save_com
         self.filter_cyclic = filter_cyclic
-        self.stat_dict = {}
+        self.stat_list = []
         self.post_list = []
-        self.stat_df = pd.DataFrame(columns=self.relevant_stats)
         post_columns = self.post_keys[:]
         if save_com:
             post_columns.append('com')
@@ -140,6 +140,7 @@ class Extractor:
             post_columns.append(column)
         self.post_df_columns = post_columns
         self.post_df = pd.DataFrame(columns=post_columns)
+        self.stat_df = pd.DataFrame(columns=self.relevant_stats)
         if self.mode == 'legacy':
             logging.debug("Extracting information from files collected from 4chan API.")
         if self.mode == 'pol_set':
@@ -147,12 +148,17 @@ class Extractor:
         for thread_tuple in tqdm(self.thread_generator()):
             self.extract_json(thread_tuple)
             if self.counter > batch_size:
-                temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
-                self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
+                temp_post_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
+                self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True)
                 self.post_list = []
+                temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
+                self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True)
+                self.stat_list = []
                 self.counter = 0
-        temp_df = pd.DataFrame(columns=self.post_df_columns, data=self.post_list)
-        self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
+        temp_post_df = pd.DataFrame(columns=self.post_df_columns, data=self.post_list)
+        self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True)
+        temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
+        self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True)
 
     def thread_generator(self):
         if self.mode == 'pol_set':
@@ -182,15 +188,15 @@ class Extractor:
         """
         for post in thread_tuple.thread_dict['posts']:
             if post['no'] == thread_tuple.thread_id:
-                stat_temp = {'board': thread_tuple.board}
+                stat_temp = {'board': thread_tuple.board, 'thread_id': thread_tuple.thread_id}
                 for rel_stat in self.relevant_stats:
-                    if rel_stat != 'board':
+                    if rel_stat not in ['board', 'thread_id']:
                         try:
                             stat_temp[rel_stat] = post[rel_stat]
                         except KeyError:
                             logging.debug(f"Missing information for {rel_stat} in thread no {thread_tuple.thread_id}")
                             stat_temp[rel_stat] = 'MISSING'
-                self.stat_df.loc[thread_tuple.thread_id] = stat_temp
+                self.stat_list.append(stat_temp)
             post_dict = {'thread_id': thread_tuple.thread_id,
                          'board': thread_tuple.board}
             for key in self.post_keys:
@@ -233,10 +239,10 @@ class Extractor:
         """
         Method to save the extracted information to a json file.
         """
-        if not self.stat_dict or not self.post_list:
+        if not self.stat_list or not self.post_list:
             self.extract()
         with open(f"{self.out_path}/stats.json", "w") as outfile:
-            json.dump(self.stat_dict, outfile)
+            json.dump(self.stat_list, outfile)
         with open(f"{self.out_path}/posts.json", "w") as outfile:
             json.dump(self.post_list, outfile)
 
@@ -245,9 +251,9 @@ class Extractor:
         Method to create a pandas dataframe for the extracted statistics and another one for information on the posts.
         Will also detect the (dominant) language in each thread and save it to the statistics dataframe.
         """
-        if not self.stat_dict or not self.post_list:
+        if not self.stat_list or not self.post_list:
             self.extract()
-        self.stat_df = pd.DataFrame(data=self.stat_dict).transpose()
+        self.stat_df = pd.DataFrame(data=self.stat_list).transpose()
         self.stat_df.index = self.stat_df.no
         self.stat_df = self.stat_df.drop(columns='no')
         self.stat_df['is_acyclic'] = False
