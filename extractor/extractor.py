@@ -3,17 +3,19 @@ from collections import defaultdict
 import json
 from tqdm import tqdm
 import pandas as pd
+import swifter
 from bs4 import BeautifulSoup as bs
 import networkx as nx
 import warnings
 import logging
 from langdetect import detect
-
+from collections import namedtuple
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
-
 
 #todo: setup logger
 #todo: check for proper extraction (see chris project)
+#todo: Data Classes (data classes json)
+
 
 class Extractor:
     """
@@ -40,6 +42,8 @@ class Extractor:
         self.loaded = False
         self.save_com = None
         self.counter = 0
+        self.post_df_columns = None
+        self.ThreadTuple = namedtuple('ThreadTuple', ['board', 'thread_id', 'thread_file'])
 
     def load(self, in_path=None, out_path=None, mode="legacy", file_name=None, debug=False):
         """
@@ -115,23 +119,29 @@ class Extractor:
         self.post_list = []
         self.stat_df = pd.DataFrame(columns=self.relevant_stats)
         post_columns = self.post_keys[:]
+        if save_com:
+            post_columns.append('com')
         if save_full_text:
             post_columns.append('full_string')
         if save_own_text:
             post_columns.append('own_text')
         if save_quote_text:
             post_columns.append("quote_string")
-        for column in ['thread_id', 'quoted_list']:
+        #todo: change back
+        #for column in ['thread_id', 'quoted_list']:
+        for column in ['thread_id']:
+
             post_columns.append(column)
+        self.post_df_columns = post_columns
         self.post_df = pd.DataFrame(columns=post_columns)
         if self.mode == 'legacy':
             logging.debug("Extracting information from files collected from 4chan API.")
-            self.extract_legacy()
+            self.load_legacy()
         if self.mode == 'pol_set':
             logging.debug("Extracting information from pol dataset.")
-            self.extract_pol_set()
+            self.load_pol_set()
 
-    def extract_legacy(self):
+    def load_legacy(self):
         if not self.file_dict:
             self.create_file_dict()
         for board in tqdm(self.file_dict.keys(), desc='Board'):
@@ -145,39 +155,27 @@ class Extractor:
                     self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
                     self.post_list = []
                     self.counter = 0
+        temp_df = pd.DataFrame(columns=self.post_df_columns, data=self.post_list)
+        self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
+
+    def load_pol_set(self):
+        self.post_keys.append('extracted_poster_id')
+        self.board = 'pol'
+        with open(f"{self.in_path}/pol_062016-112019_labeled.ndjson" if self.file_name is None
+                  else f"{self.in_path}/{self.file_name}") as f:
+            for line in tqdm(f, desc='Threads'):
+                self.json_file = json.loads(line)
+                self.thread_id = self.json_file['posts'][0]['no']
+                self.extract_json()
+                if self.counter > 10000:
+                    temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
+                    self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
+                    self.post_list = []
+                    self.counter = 0
+            #self.post_df = pd.DataFrame(columns=self.post_df_columns, data=self.post_list)
         temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
         self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
 
-
-    def extract_pol_set(self):
-        self.post_keys.append('extracted_poster_id')
-        self.board = 'pol'
-        if self.file_name is None:
-            with open(f"{self.in_path}pol_062016-112019_labeled.ndjson") as f:
-                for line in tqdm(f, desc='Threads'):
-                    self.json_file = json.loads(line)
-                    self.thread_id = self.json_file['posts'][0]['no']
-                    self.extract_json()
-                    if self.counter > 10000:
-                        temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
-                        self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
-                        self.post_list = []
-                        self.counter = 0
-            temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
-            self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
-        else:
-            with open(f"{self.in_path}/{self.file_name}") as f:
-                for line in tqdm(f, desc='Threads'):
-                    self.json_file = json.loads(line)
-                    self.thread_id = self.json_file['posts'][0]['no']
-                    self.extract_json()
-                    if self.counter > 10000:
-                        temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
-                        self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
-                        self.post_list = []
-                        self.counter = 0
-            temp_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
-            self.post_df = pd.concat([self.post_df, temp_df], ignore_index=True)
 
     def extract_json(self):
         #todo: add log instead of print
@@ -208,26 +206,32 @@ class Extractor:
                     if self.save_com:
                         post_dict['com'] = post['com']
                     try:
-                        full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text(post['com'])
+                        #full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text(post['com'])
+                        #self.strip_text_new(post['com'])
+                        pass
                     except Exception as e:
                         logging.error(f"Exception while extracting post {post['no']} in thread {self.thread_id}. {e}")
                 else:
                     if self.save_com:
                         post_dict['com'] = ""
-                    full_string, quoted_list, quote_string, own_text, dead_links = "", [], "", "", []
-                post_dict['full_string'] = full_string
-                post_dict['quoted_list'] = quoted_list
-                post_dict['quote_string'] = quote_string
-                post_dict['own_text'] = own_text
-                post_dict['dead_links'] = dead_links
+                    #full_string, quoted_list, quote_string, own_text, dead_links = "", [], "", "", []
+                #post_dict['full_string'] = full_string
+                #post_dict['quoted_list'] = quoted_list
+                #post_dict['quote_string'] = quote_string
+                #post_dict['own_text'] = own_text
+                #post_dict['dead_links'] = dead_links
+            #todo: remove exception
             try:
                 temp_post_dict = {}
-                for key in self.post_df.columns:
+                #print(f"post_dict: {post_dict}")
+                for key in self.post_df_columns:
                     temp_post_dict[key] = post_dict[key]
                 self.post_list.append(temp_post_dict)
                 self.counter += 1
             except Exception as e:
-                print(self.post_df.columns, post_dict.keys(), e)
+                print(e)
+                #print(self.post_df.columns, post_dict.keys(), e)
+
 
     def save_json(self):
         """
@@ -275,7 +279,7 @@ class Extractor:
         quote_string = ''
         own_text = ''
         dead_link_list = []
-        for item in soup.contents:
+        for i, item in enumerate(soup.contents):
             if str(item).startswith('<a class="quotelink"'):
                 quote_ids = soup.find_all(class_='quotelink')
                 for quote_id in quote_ids:
@@ -301,7 +305,74 @@ class Extractor:
                 own_text = own_text + ' ' + (str(item))
         return full_string, quoted_list, quote_string, own_text, dead_link_list
 
+    def strip_text_new(self, text):
+        soup = bs(text, 'html.parser')
+        full_string = ''
+        quoted_list = []
+        own_text = ''
+        quote_string = ''
+        dead_link_list = []
+        for i, item in enumerate(soup.contents):
+            if item.name is None:
+                full_string = full_string + item
+            elif item.name == 'br' or item.name == 'wbr':
+                # todo: how to handle line breaks
+                # full_string = full_string +
+                pass
+            elif item.name == 'span':
+                quote_string = quote_string + item.text
+            elif item.name == 'a':
+                quote_id = item.text.strip(">>")
+                if quote_id.isdigit():
+                    quoted_list.append(int(quote_id))
+            else:
+                print(type(item), item.name, self.thread_id)
+                #raise Exception("unknow soup element")
+        return full_string, quoted_list, own_text, quote_string, dead_link_list
+
+        """        text = text.replace('</br>', '\n')
+                soup = bs(text, 'html.parser')
+        
+                for item in soup.contents:
+                    print('>>>', item.name)
+        
+                    if item.name == 'br':
+                        yield '\n'
+        
+                    elif item.name == 'a':
+                        yield item.contents
+        
+                    elif item.name is None:
+                        yield item
+        """
+        # def strip_quote_link():
+        #     for quote_id in soup.find_all(class_='quotelink'):
+        #         qid = quote_id.contents[0].strip('>>')
+        #         if qid.isdigit():
+        #             yield int(qid), quote_id.contents[0]
+        #
+        # def strip_quote():
+        #     for quote in soup.find_all(class_='quote'):
+        #         yield str(quote.contents[0])
+        #
+        # def strip_dead_link():
+        #     for dead_link in soup.find_all(class_='deadlink'):
+        #         dl = dead_link.contents[0].strip('>>')
+        #         if dl.isdigit():
+        #             yield int(dl)
+        #         else:
+        #             yield dead_link.contents[0]
+        #
+        # def strip_text():
+        #     for item in soup.contents:
+        #         if item.name is None:
+        #             yield item
+        #
+        # return strip_quote_link(), strip_quote(), strip_dead_link(), strip_text()
+
+
     def generate_network(self, thread_id):
+        #todo: change from using at to use of row.resto/row.quoted_list
         """
         Method to create a network graph for the provided thread_id
         :param thread_id: Id of the thread to create the network from.
