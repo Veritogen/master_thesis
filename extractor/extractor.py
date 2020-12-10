@@ -219,8 +219,7 @@ class Extractor:
                         post_dict['com'] = post['com']
                     try:
                         #full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text(post['com'])
-                        #self.strip_text_new(post['com'])
-                        pass
+                        self.strip_text_new(post['com'])
                     except Exception as e:
                         logging.error(f"Exception while extracting post {post['no']} in thread {thread_tuple.thread_id}"
                                       f". {e}")
