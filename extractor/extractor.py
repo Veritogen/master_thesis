@@ -9,7 +9,7 @@ import networkx as nx
 import warnings
 import logging
 from langdetect import detect
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 
 #todo: setup logger
@@ -46,6 +46,7 @@ class Extractor:
         self.extract_from_post = ['quoted_list']
         self.PostTuple = namedtuple('PostTuple', ['full_string', 'quoted_list', 'own_text', 'quote_string',
                                                   'dead_link_list'])
+        self.tag_collection = defaultdict(list)
 
     def load(self, in_path=None, out_path=None, mode="legacy", file_name=None, debug=False):
         """
@@ -332,14 +333,20 @@ class Extractor:
                 pass
             elif item.name == 'span':
                 #todo: handle deadlinks
-                quote_string = quote_string + item.text
+                if item.attrs['class'][0] == 'quote':
+                    quote_string = quote_string + item.text
             elif item.name == 'a':
                 quote_id = item.text.strip(">>")
                 if quote_id.isdigit():
                     quoted_list.append(int(quote_id))
             else:
-                print(type(item), item.name, item)
+                self.tag_collection[item.name].append(item)
+                #print(type(item), item.name, item)
                 #raise Exception("unknow soup element")
+                """
+                strong tag; name = 'strong', has .text attribute
+                div tag; name = div, 
+                """
         post_tuple = self.PostTuple(full_string=full_string, quoted_list=quoted_list, own_text=own_text,
                               quote_string=quote_string, dead_link_list=dead_link_list)
         return [post_tuple.__getattribute__(post_info) for post_info in self.extract_from_post]
