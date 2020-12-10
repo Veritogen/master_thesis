@@ -340,7 +340,7 @@ class Extractor:
                 if quote_id.isdigit():
                     quoted_list.append(int(quote_id))
             else:
-                self.tag_collection[item.name].append(item)
+                self.tag_collection[str(item.name)].append(item)
                 #print(type(item), item.name, item)
                 #raise Exception("unknow soup element")
                 """
