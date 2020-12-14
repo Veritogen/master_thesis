@@ -408,10 +408,12 @@ class Extractor:
             full_string = f"{full_string}{text} "
         for element in doc.iter():
             if element.tag == 'a':
-                if element.attrib['class'] == 'quotelink':
-                    quote_id = element.text.strip('>>')
-                    if quote_id.isdigit():
-                        quote_list.append(int(quote_id))
+                if element.attrib:
+                    if 'class' in element.attrib.keys():
+                        if element.attrib['class'] == 'quotelink':
+                            quote_id = element.text.strip('>>')
+                            if quote_id.isdigit():
+                                quote_list.append(int(quote_id))
             elif element.tag == 'span':
                 if element.attrib:
                     if 'class' in element.attrib.keys():
