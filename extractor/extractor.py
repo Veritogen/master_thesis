@@ -280,7 +280,7 @@ class Extractor:
         self.post_df = self.post_df.drop(columns='no')
         self.detect_lang()
 
-    def strip_text(self, text, post_id):
+    def strip_text(self, input_text, post_id):
         """
         Method to extract data from the text of a post, like the thread id, the quoted/green text and the text that is
         written by the poster.
@@ -292,11 +292,12 @@ class Extractor:
         quote_list = []
         quote_string = ''
         dead_links = []
-        if text:
+        if input_text:
             try:
-                doc = html.fromstring(text)
+                doc = html.fromstring(input_text)
             except Exception as e:
-                print(f"Error extracting text from post no {post_id}. Text is: {text}. Exception is {e}")
+                print(f"Error creating lxml doc from given text. Post no: {post_id}. Text is: {input_text}. "
+                      f"Exception is {e}")
                 return_dict = {'full_string': full_string,
                                'quoted_list': quote_list,
                                'quote_string': quote_string,
@@ -326,7 +327,7 @@ class Extractor:
                     elif element.tag == 'img':
                         full_string = f"{full_string}{element.attrib['alt']} "
             except Exception as e:
-                print(f"Error extracting text from post no {post_id}. Text is: {text}. Exception is {e}")
+                print(f"Error extracting text from post no {post_id}. Text is: {input_text}. Exception is {e}")
         return_dict = {'full_string': full_string,
                        'quoted_list': quote_list,
                        'quote_string': quote_string,
