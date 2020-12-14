@@ -10,6 +10,7 @@ import warnings
 import logging
 from langdetect import detect
 from collections import namedtuple, defaultdict
+from lxml import html
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 
 #todo: setup logger
@@ -157,16 +158,16 @@ class Extractor:
             self.extract_json(thread_tuple)
             if self.counter > batch_size:
                 temp_post_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
-                self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True)
+                self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
                 self.post_list = []
                 temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
-                self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True)
+                self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
                 self.stat_list = []
                 self.counter = 0
         temp_post_df = pd.DataFrame(columns=self.post_df_columns, data=self.post_list)
-        self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True)
+        self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
         temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
-        self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True)
+        self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
         #self.post_df[self.extract_from_post] = self.post_df.swifter.apply(lambda x: self.strip_text_new(x['com']),
         #                                                                  result_type='expand', axis=1)
 
@@ -284,7 +285,7 @@ class Extractor:
         that are quoted, the text written by the user and a list of dead links.
         """
         # todo: handle dead link class
-        soup = bs(text, 'html.parser')
+        soup = bs(text, 'lxml')
         full_string = ''
         quoted_list = []
         quote_string = ''
@@ -326,6 +327,7 @@ class Extractor:
         for i, item in enumerate(soup.contents):
             if item.name is None:
                 full_string = full_string + item
+                own_text = f"{own_text} {item}"
             elif item.name == 'br' or item.name == 'wbr':
                 # todo: how to handle line breaks
                 # full_string = full_string +
@@ -338,17 +340,23 @@ class Extractor:
                 quote_id = item.text.strip(">>")
                 if quote_id.isdigit():
                     quoted_list.append(int(quote_id))
+            #changed in order to collect all tags
+            #todo: disable once processd everything
+            #if len(self.tag_collection[item.name]) < 1000:
+            #   self.tag_collection[str(item.name)].append(item)
             else:
                 self.tag_collection[str(item.name)].append(item)
                 #print(type(item), item.name, item)
                 #raise Exception("unknow soup element")
-                """
-                strong tag; name = 'strong', has .text attribute
-                div tag; name = div, 
-                """
+                #"""
+                #strong tag; name = 'strong', has .text attribute
+                #div tag; name = div,
+                #"""
         post_tuple = self.PostTuple(full_string=full_string, quoted_list=quoted_list, own_text=own_text,
                               quote_string=quote_string, dead_link_list=dead_link_list)
-        return [post_tuple.__getattribute__(post_info) for post_info in self.extract_from_post]
+        #print(post_tuple, text)
+        #time.sleep(10)
+        #return [post_tuple.__getattribute__(post_info) for post_info in self.extract_from_post]
 
         """        text = text.replace('</br>', '\n')
                 soup = bs(text, 'html.parser')
@@ -390,6 +398,34 @@ class Extractor:
         #
         # return strip_quote_link(), strip_quote(), strip_dead_link(), strip_text()
 
+    def strip_text_lxml(self, text):
+        doc = html.fromstring(text)
+        full_string = ''
+        quote_list = []
+        quote_string = ''
+        dead_links = []
+        for text in doc.itertext():
+            full_string = f"{full_string} {text}"
+        for element in doc.iter():
+            if element.tag == 'a':
+                if element.attrib['class'] == 'quotelink':
+                    quote_id = element.text.strip('>>')
+                    if quote_id.isdigit():
+                        quote_list.append(int(quote_id))
+            elif element.tag == 'span':
+                if element.attrib:
+                    if element.attrib['class'] == 'quote':
+                        quote_string = f"{quote_string} {element.text}"
+                    elif element.attrib['class'] == 'deadlink':
+                        dead_id = element.text.strip('>>')
+                        if dead_id.isdigit():
+                            dead_links.append(int(dead_id))
+        return_dict = {'full_string': full_string,
+                       'quoted_list': quote_list,
+                       'quote_string': quote_string,
+                       'dead_links_list': dead_links
+                       }
+        return [return_dict[post_info] for post_info in self.extract_from_post]
 
     def generate_network(self, thread_id):
         #todo: change from using at to use of row.resto/row.quoted_list
