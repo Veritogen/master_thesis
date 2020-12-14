@@ -218,12 +218,12 @@ class Extractor:
                 if 'com' in post.keys():
                     if self.save_com:
                         post_dict['com'] = post['com']
-                    try:
-                        #full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text(post['com'])
-                        self.strip_text_new(post['com'])
-                    except Exception as e:
-                        logging.error(f"Exception while extracting post {post['no']} in thread {thread_tuple.thread_id}"
-                                      f". {e}")
+                        try:
+                            #full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text(post['com'])
+                            self.strip_text(post['com'])
+                        except Exception as e:
+                            logging.error(f"Exception while extracting post {post['no']} in thread {thread_tuple.thread_id}"
+                                          f". {e}")
                 else:
                     if self.save_com:
                         post_dict['com'] = ""
@@ -284,121 +284,6 @@ class Extractor:
         :return: Returns the full post, mainly for readability, a list of the quotes within the post, the (post) ids
         that are quoted, the text written by the user and a list of dead links.
         """
-        # todo: handle dead link class
-        soup = bs(text, 'lxml')
-        full_string = ''
-        quoted_list = []
-        quote_string = ''
-        own_text = ''
-        dead_link_list = []
-        for i, item in enumerate(soup.contents):
-            if str(item).startswith('<a class="quotelink"'):
-                quote_ids = soup.find_all(class_='quotelink')
-                for quote_id in quote_ids:
-                    full_string = full_string + quote_id.contents[0]
-                    if quote_id.contents[0].strip('>>').isdigit():
-                        quoted_list.append(int(quote_id.contents[0].strip('>>')))
-            elif str(item).startswith('<span class="quote">'):
-                quotes = soup.find_all(class_='quote')
-                for quote in quotes:
-                    full_string = full_string + '"' + str(quote.contents[0]) + '" '
-                    quote_string = quote_string + ' ' + str(quote.contents[0])
-            elif str(item).startswith('<br/>'):
-                full_string = full_string + ' \n '
-            elif str(item).startswith('<span class="deadlink'):
-                dead_links = soup.find_all(class_='deadlink')
-                for dead_link in dead_links:
-                    if dead_link.contents[0].strip('>>').isdigit():
-                        dead_link_list.append(int(dead_link.contents[0].strip('>>')))
-                    else:
-                        dead_link_list.append(dead_link.contents[0])
-            else:
-                full_string = full_string + str(item)
-                own_text = own_text + ' ' + (str(item))
-        return full_string, quoted_list, quote_string, own_text, dead_link_list
-
-    def strip_text_new(self, text):
-        soup = bs(text, 'html.parser')
-        full_string = ''
-        quoted_list = []
-        own_text = ''
-        quote_string = ''
-        dead_link_list = []
-        for i, item in enumerate(soup.contents):
-            if item.name is None:
-                full_string = full_string + item
-                own_text = f"{own_text} {item}"
-            elif item.name == 'br' or item.name == 'wbr':
-                # todo: how to handle line breaks
-                # full_string = full_string +
-                pass
-            elif item.name == 'span':
-                #todo: handle deadlinks
-                if item.attrs['class'][0] == 'quote':
-                    quote_string = quote_string + item.text
-            elif item.name == 'a':
-                quote_id = item.text.strip(">>")
-                if quote_id.isdigit():
-                    quoted_list.append(int(quote_id))
-            #changed in order to collect all tags
-            #todo: disable once processd everything
-            #if len(self.tag_collection[item.name]) < 1000:
-            #   self.tag_collection[str(item.name)].append(item)
-            else:
-                self.tag_collection[str(item.name)].append(item)
-                #print(type(item), item.name, item)
-                #raise Exception("unknow soup element")
-                #"""
-                #strong tag; name = 'strong', has .text attribute
-                #div tag; name = div,
-                #"""
-        post_tuple = self.PostTuple(full_string=full_string, quoted_list=quoted_list, own_text=own_text,
-                              quote_string=quote_string, dead_link_list=dead_link_list)
-        #print(post_tuple, text)
-        #time.sleep(10)
-        #return [post_tuple.__getattribute__(post_info) for post_info in self.extract_from_post]
-
-        """        text = text.replace('</br>', '\n')
-                soup = bs(text, 'html.parser')
-        
-                for item in soup.contents:
-                    print('>>>', item.name)
-        
-                    if item.name == 'br':
-                        yield '\n'
-        
-                    elif item.name == 'a':
-                        yield item.contents
-        
-                    elif item.name is None:
-                        yield item
-        """
-        # def strip_quote_link():
-        #     for quote_id in soup.find_all(class_='quotelink'):
-        #         qid = quote_id.contents[0].strip('>>')
-        #         if qid.isdigit():
-        #             yield int(qid), quote_id.contents[0]
-        #
-        # def strip_quote():
-        #     for quote in soup.find_all(class_='quote'):
-        #         yield str(quote.contents[0])
-        #
-        # def strip_dead_link():
-        #     for dead_link in soup.find_all(class_='deadlink'):
-        #         dl = dead_link.contents[0].strip('>>')
-        #         if dl.isdigit():
-        #             yield int(dl)
-        #         else:
-        #             yield dead_link.contents[0]
-        #
-        # def strip_text():
-        #     for item in soup.contents:
-        #         if item.name is None:
-        #             yield item
-        #
-        # return strip_quote_link(), strip_quote(), strip_dead_link(), strip_text()
-
-    def strip_text_lxml(self, text):
         doc = html.fromstring(text)
         full_string = ''
         quote_list = []
