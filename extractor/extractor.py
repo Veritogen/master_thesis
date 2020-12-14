@@ -284,12 +284,12 @@ class Extractor:
         :return: Returns the full post, mainly for readability, a list of the quotes within the post, the (post) ids
         that are quoted, the text written by the user and a list of dead links.
         """
-        doc = html.fromstring(text)
         full_string = ''
         quote_list = []
         quote_string = ''
         dead_links = []
         if text:
+            doc = html.fromstring(text)
             for text in doc.itertext():
                 full_string = f"{full_string}{text} "
             for element in doc.iter():
