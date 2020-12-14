@@ -289,7 +289,16 @@ class Extractor:
         quote_string = ''
         dead_links = []
         if text:
-            doc = html.fromstring(text)
+            try:
+                doc = html.fromstring(text)
+            except:
+                print(text)
+                return_dict = {'full_string': full_string,
+                               'quoted_list': quote_list,
+                               'quote_string': quote_string,
+                               'dead_links_list': dead_links
+                               }
+                return [return_dict[post_info] for post_info in self.extract_from_post]
             for text in doc.itertext():
                 full_string = f"{full_string}{text} "
             for element in doc.iter():
