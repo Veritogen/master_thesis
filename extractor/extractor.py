@@ -312,18 +312,28 @@ class Extractor:
                         if element.attrib:
                             if 'class' in element.attrib.keys():
                                 if element.attrib['class'] == 'quotelink':
-                                    quote_id = element.text.strip('>>')
-                                    if quote_id.isdigit():
-                                        quote_list.append(int(quote_id))
+                                    if element.text is not None:
+                                        quote_id = element.text.strip('>>')
+                                        if quote_id.isdigit():
+                                            quote_list.append(int(quote_id))
+                                        #todo: remove below
+                                        #todo: depending on frequency, consider no string links
+                                        else:
+                                            print(quote_id)
                     elif element.tag == 'span':
                         if element.attrib:
                             if 'class' in element.attrib.keys():
                                 if element.attrib['class'] == 'quote':
                                     quote_string = f"{quote_string} {element.text}"
                                 elif element.attrib['class'] == 'deadlink':
-                                    dead_id = element.text.strip('>>')
-                                    if dead_id.isdigit():
-                                        dead_links.append(int(dead_id))
+                                    if element.text is not None:
+                                        dead_id = element.text.strip('>>')
+                                        if dead_id.isdigit():
+                                            dead_links.append(int(dead_id))
+                                        #todo: remove below
+                                        #todo: depending on frequency, consider no string links
+                                        else:
+                                            print(dead_id)
                     elif element.tag == 'img':
                         full_string = f"{full_string}{element.attrib['alt']} "
             except Exception as e:
