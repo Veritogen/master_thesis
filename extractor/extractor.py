@@ -168,8 +168,11 @@ class Extractor:
         self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
         temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
         self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
-        #self.post_df[self.extract_from_post] = self.post_df.swifter.apply(lambda x: self.strip_text_new(x['com']),
-        #                                                                  result_type='expand', axis=1)
+        """self.post_df[self.extract_from_post] = self.post_df.swifter.apply(lambda x:
+                                                                          self.strip_text_new(text=x['com'],
+                                                                                              post_id=x['no']),
+                                                                          result_type='expand', axis=1)
+        """
 
     def thread_generator(self):
         if self.mode == 'pol_set':
@@ -218,6 +221,7 @@ class Extractor:
                 if 'com' in post.keys():
                     if self.save_com:
                         post_dict['com'] = post['com']
+                        #todo: remove
                         try:
                             #full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text(post['com'])
                             self.strip_text(post['com'])
@@ -276,7 +280,7 @@ class Extractor:
         self.post_df = self.post_df.drop(columns='no')
         self.detect_lang()
 
-    def strip_text(self, text):
+    def strip_text(self, text, post_id):
         """
         Method to extract data from the text of a post, like the thread id, the quoted/green text and the text that is
         written by the poster.
@@ -291,35 +295,38 @@ class Extractor:
         if text:
             try:
                 doc = html.fromstring(text)
-            except:
-                print(text)
+            except Exception as e:
+                print(f"Error extracting text from post no {post_id}. Text is: {text}. Exception is {e}")
                 return_dict = {'full_string': full_string,
                                'quoted_list': quote_list,
                                'quote_string': quote_string,
                                'dead_links_list': dead_links
                                }
                 return [return_dict[post_info] for post_info in self.extract_from_post]
-            for text in doc.itertext():
-                full_string = f"{full_string}{text} "
-            for element in doc.iter():
-                if element.tag == 'a':
-                    if element.attrib:
-                        if 'class' in element.attrib.keys():
-                            if element.attrib['class'] == 'quotelink':
-                                quote_id = element.text.strip('>>')
-                                if quote_id.isdigit():
-                                    quote_list.append(int(quote_id))
-                elif element.tag == 'span':
-                    if element.attrib:
-                        if 'class' in element.attrib.keys():
-                            if element.attrib['class'] == 'quote':
-                                quote_string = f"{quote_string} {element.text}"
-                            elif element.attrib['class'] == 'deadlink':
-                                dead_id = element.text.strip('>>')
-                                if dead_id.isdigit():
-                                    dead_links.append(int(dead_id))
-                elif element.tag == 'img':
-                    full_string = f"{full_string}{element.attrib['alt']} "
+            try:
+                for text in doc.itertext():
+                    full_string = f"{full_string}{text} "
+                for element in doc.iter():
+                    if element.tag == 'a':
+                        if element.attrib:
+                            if 'class' in element.attrib.keys():
+                                if element.attrib['class'] == 'quotelink':
+                                    quote_id = element.text.strip('>>')
+                                    if quote_id.isdigit():
+                                        quote_list.append(int(quote_id))
+                    elif element.tag == 'span':
+                        if element.attrib:
+                            if 'class' in element.attrib.keys():
+                                if element.attrib['class'] == 'quote':
+                                    quote_string = f"{quote_string} {element.text}"
+                                elif element.attrib['class'] == 'deadlink':
+                                    dead_id = element.text.strip('>>')
+                                    if dead_id.isdigit():
+                                        dead_links.append(int(dead_id))
+                    elif element.tag == 'img':
+                        full_string = f"{full_string}{element.attrib['alt']} "
+            except Exception as e:
+                print(f"Error extracting text from post no {post_id}. Text is: {text}. Exception is {e}")
         return_dict = {'full_string': full_string,
                        'quoted_list': quote_list,
                        'quote_string': quote_string,
