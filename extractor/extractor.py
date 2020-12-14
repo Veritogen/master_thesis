@@ -289,27 +289,28 @@ class Extractor:
         quote_list = []
         quote_string = ''
         dead_links = []
-        for text in doc.itertext():
-            full_string = f"{full_string}{text} "
-        for element in doc.iter():
-            if element.tag == 'a':
-                if element.attrib:
-                    if 'class' in element.attrib.keys():
-                        if element.attrib['class'] == 'quotelink':
-                            quote_id = element.text.strip('>>')
-                            if quote_id.isdigit():
-                                quote_list.append(int(quote_id))
-            elif element.tag == 'span':
-                if element.attrib:
-                    if 'class' in element.attrib.keys():
-                        if element.attrib['class'] == 'quote':
-                            quote_string = f"{quote_string} {element.text}"
-                        elif element.attrib['class'] == 'deadlink':
-                            dead_id = element.text.strip('>>')
-                            if dead_id.isdigit():
-                                dead_links.append(int(dead_id))
-            elif element.tag == 'img':
-                full_string = f"{full_string}{element.attrib['alt']} "
+        if text:
+            for text in doc.itertext():
+                full_string = f"{full_string}{text} "
+            for element in doc.iter():
+                if element.tag == 'a':
+                    if element.attrib:
+                        if 'class' in element.attrib.keys():
+                            if element.attrib['class'] == 'quotelink':
+                                quote_id = element.text.strip('>>')
+                                if quote_id.isdigit():
+                                    quote_list.append(int(quote_id))
+                elif element.tag == 'span':
+                    if element.attrib:
+                        if 'class' in element.attrib.keys():
+                            if element.attrib['class'] == 'quote':
+                                quote_string = f"{quote_string} {element.text}"
+                            elif element.attrib['class'] == 'deadlink':
+                                dead_id = element.text.strip('>>')
+                                if dead_id.isdigit():
+                                    dead_links.append(int(dead_id))
+                elif element.tag == 'img':
+                    full_string = f"{full_string}{element.attrib['alt']} "
         return_dict = {'full_string': full_string,
                        'quoted_list': quote_list,
                        'quote_string': quote_string,
