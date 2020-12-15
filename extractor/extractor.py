@@ -120,15 +120,13 @@ class Extractor:
                               'spoiler']
             logging.debug("Extracting all possible information from posts.")
         else:
-            self.post_keys = ['no', 'time', 'resto']
+            self.post_keys = ['no', 'com', 'time', 'resto']
             logging.debug("Extracting limited set of information from posts.")
         self.save_com = save_com
         self.filter_cyclic = filter_cyclic
         self.stat_list = []
         self.post_list = []
         post_columns = self.post_keys[:]
-        if save_com:
-            post_columns.append('com')
         if save_full_text:
             post_columns.append('full_string')
             self.extract_from_post.append('full_string')
@@ -138,10 +136,12 @@ class Extractor:
         if save_dead_links:
             post_columns.append('dead_links')
             self.extract_from_post.append('dead_links')
-        for column in ['thread_id', 'quoted_list']:
+        for column in ['thread_id']:
             post_columns.append(column)
         self.post_df_columns = post_columns
         self.post_df = pd.DataFrame(columns=post_columns)
+        if not self.save_com:
+            self.post_df = self.post_df.drop(columns='com')
         self.stat_df = pd.DataFrame(columns=self.relevant_stats)
         if self.mode == 'legacy':
             logging.debug("Extracting information from files collected from 4chan API.")
@@ -150,8 +150,8 @@ class Extractor:
         for thread_tuple in tqdm(self.thread_generator()):
             self.extract_json(thread_tuple)
             if self.counter > batch_size:
-                temp_post_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
-                temp_post_df = temp_post_df[self.extract_from_post].swifter.apply(lambda x:
+                temp_post_df = pd.DataFrame(columns=post_columns, data=self.post_list)
+                temp_post_df[self.extract_from_post] = temp_post_df.swifter.apply(lambda x:
                                                                                   self.strip_text(input_text=x['com'],
                                                                                                   post_id=x['no']),
                                                                                   result_type='expand', axis=1)
@@ -163,21 +163,16 @@ class Extractor:
                 self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
                 self.stat_list = []
                 self.counter = 0
-        temp_post_df = pd.DataFrame(columns=self.post_df_columns, data=self.post_list)
-        temp_post_df = temp_post_df[self.extract_from_post].swifter.apply(lambda x:
-                                                                          self.strip_text(input_text=x['com'],
-                                                                                          post_id=x['no']),
+        temp_post_df = pd.DataFrame(columns=post_columns, data=self.post_list)
+        temp_post_df[self.extract_from_post] = temp_post_df.swifter.apply(lambda x: self.strip_text(input_text=x['com'],
+                                                                                                    post_id=x['no']),
                                                                           result_type='expand', axis=1)
         if not self.save_com:
             temp_post_df = temp_post_df.drop(columns='com')
         self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
         temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
         self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
-        """self.post_df[self.extract_from_post] = self.post_df.swifter.apply(lambda x:
-                                                                          self.strip_text_new(text=x['com'],
-                                                                                              post_id=x['no']),
-                                                                          result_type='expand', axis=1)
-        """
+
 
     def thread_generator(self):
         if self.mode == 'pol_set':
