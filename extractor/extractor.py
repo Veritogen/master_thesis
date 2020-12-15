@@ -229,7 +229,7 @@ class Extractor:
                     post_dict['com'] = ""
             temp_post_dict = {}
             for key in self.post_df_columns:
-                if key not in ['full_string', 'own_text', 'quote_string', 'dead_links']
+                if key not in ['full_string', 'own_text', 'quote_string', 'dead_links']:
                     temp_post_dict[key] = post_dict[key]
             self.post_list.append(temp_post_dict)
             self.counter += 1
