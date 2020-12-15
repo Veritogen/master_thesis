@@ -98,8 +98,7 @@ class Extractor:
         logging.debug("File dict created.")
 
     def extract(self, filter_cyclic=True, complete_extraction=False, save_com=False,
-                save_full_text=True, save_own_text=False, save_quote_text=False,
-                save_dead_links=False, batch_size=10000):
+                save_full_text=True, save_quote_text=False, save_dead_links=False, batch_size=10000):
         """
         Method to load the json files and set the according thread id/board within the class.
         :param filter_cyclic: If true, filter only threads where the post network in the thread is acyclic.
@@ -133,19 +132,13 @@ class Extractor:
         if save_full_text:
             post_columns.append('full_string')
             self.extract_from_post.append('full_string')
-        if save_own_text:
-            post_columns.append('own_text')
-            self.extract_from_post.append('own_text')
         if save_quote_text:
             post_columns.append('quote_string')
             self.extract_from_post.append('quote_string')
         if save_dead_links:
             post_columns.append('dead_links')
             self.extract_from_post.append('dead_links')
-        #todo: change back
-        #for column in ['thread_id', 'quoted_list']:
-        for column in ['thread_id']:
-
+        for column in ['thread_id', 'quoted_list']:
             post_columns.append(column)
         self.post_df_columns = post_columns
         self.post_df = pd.DataFrame(columns=post_columns)
@@ -158,6 +151,12 @@ class Extractor:
             self.extract_json(thread_tuple)
             if self.counter > batch_size:
                 temp_post_df = pd.DataFrame(columns=self.post_df.columns, data=self.post_list)
+                temp_post_df = temp_post_df[self.extract_from_post].swifter.apply(lambda x:
+                                                                                  self.strip_text(input_text=x['com'],
+                                                                                                  post_id=x['no']),
+                                                                                  result_type='expand', axis=1)
+                if not self.save_com:
+                    temp_post_df = temp_post_df.drop(columns='com')
                 self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
                 self.post_list = []
                 temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
@@ -165,6 +164,12 @@ class Extractor:
                 self.stat_list = []
                 self.counter = 0
         temp_post_df = pd.DataFrame(columns=self.post_df_columns, data=self.post_list)
+        temp_post_df = temp_post_df[self.extract_from_post].swifter.apply(lambda x:
+                                                                          self.strip_text(input_text=x['com'],
+                                                                                          post_id=x['no']),
+                                                                          result_type='expand', axis=1)
+        if not self.save_com:
+            temp_post_df = temp_post_df.drop(columns='com')
         self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
         temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
         self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
@@ -219,35 +224,15 @@ class Extractor:
                 else:
                     post_dict[key] = None
                 if 'com' in post.keys():
-                    if self.save_com:
-                        post_dict['com'] = post['com']
-                        #todo: remove
-                        try:
-                            #full_string, quoted_list, quote_string, own_text, dead_links = self.strip_text(post['com'])
-                            self.strip_text(post['com'])
-                        except Exception as e:
-                            logging.error(f"Exception while extracting post {post['no']} in thread {thread_tuple.thread_id}"
-                                          f". {e}")
+                    post_dict['com'] = post['com']
                 else:
-                    if self.save_com:
-                        post_dict['com'] = ""
-                    #full_string, quoted_list, quote_string, own_text, dead_links = "", [], "", "", []
-                #post_dict['full_string'] = full_string
-                #post_dict['quoted_list'] = quoted_list
-                #post_dict['quote_string'] = quote_string
-                #post_dict['own_text'] = own_text
-                #post_dict['dead_links'] = dead_links
-            #todo: remove exception
-            try:
-                temp_post_dict = {}
-                #print(f"post_dict: {post_dict}")
-                for key in self.post_df_columns:
+                    post_dict['com'] = ""
+            temp_post_dict = {}
+            for key in self.post_df_columns:
+                if key not in ['full_string', 'own_text', 'quote_string', 'dead_links']
                     temp_post_dict[key] = post_dict[key]
-                self.post_list.append(temp_post_dict)
-                self.counter += 1
-            except Exception as e:
-                print(e)
-                #print(self.post_df.columns, post_dict.keys(), e)
+            self.post_list.append(temp_post_dict)
+            self.counter += 1
 
     def save_json(self):
         """
@@ -260,31 +245,12 @@ class Extractor:
         with open(f"{self.out_path}/posts.json", "w") as outfile:
             json.dump(self.post_list, outfile)
 
-    def create_dfs(self):
-        """
-        Method to create a pandas dataframe for the extracted statistics and another one for information on the posts.
-        Will also detect the (dominant) language in each thread and save it to the statistics dataframe.
-        """
-        if not self.stat_list or not self.post_list:
-            self.extract()
-        self.stat_df = pd.DataFrame(data=self.stat_list).transpose()
-        self.stat_df.index = self.stat_df.no
-        self.stat_df = self.stat_df.drop(columns='no')
-        self.stat_df['is_acyclic'] = False
-        post_columns = self.post_keys[:]
-        for column in ['thread_id', 'full_string', 'quoted_list', 'quote_string', 'own_text']:
-            post_columns.append(column)
-        self.post_df = pd.DataFrame(data=self.post_list, columns=post_columns)
-        self.post_df[['resto', 'time', 'thread_id']] = self.post_df[['resto', 'time', 'thread_id']].astype(int)
-        self.post_df.index = self.post_df.no
-        self.post_df = self.post_df.drop(columns='no')
-        self.detect_lang()
-
     def strip_text(self, input_text, post_id):
         """
         Method to extract data from the text of a post, like the thread id, the quoted/green text and the text that is
         written by the poster.
-        :param text: String of post to extract the data from.
+        :param input_text: String of post to extract the data from.
+        :param post_id: Id (integer) of post in order to trace exceptions during extractions.
         :return: Returns the full post, mainly for readability, a list of the quotes within the post, the (post) ids
         that are quoted, the text written by the user and a list of dead links.
         """
@@ -296,6 +262,7 @@ class Extractor:
             try:
                 doc = html.fromstring(input_text)
             except Exception as e:
+                #todo: change to logging
                 print(f"Error creating lxml doc from given text. Post no: {post_id}. Text is: {input_text}. "
                       f"Exception is {e}")
                 return_dict = {'full_string': full_string,
@@ -316,10 +283,6 @@ class Extractor:
                                         quote_id = element.text.strip('>>')
                                         if quote_id.isdigit():
                                             quote_list.append(int(quote_id))
-                                        #todo: remove below
-                                        #todo: depending on frequency, consider no string links
-                                        else:
-                                            print(quote_id)
                     elif element.tag == 'span':
                         if element.attrib:
                             if 'class' in element.attrib.keys():
@@ -330,13 +293,10 @@ class Extractor:
                                         dead_id = element.text.strip('>>')
                                         if dead_id.isdigit():
                                             dead_links.append(int(dead_id))
-                                        #todo: remove below
-                                        #todo: depending on frequency, consider no string links
-                                        else:
-                                            print(dead_id)
                     elif element.tag == 'img':
                         full_string = f"{full_string}{element.attrib['alt']} "
             except Exception as e:
+                #todo: change to logging
                 print(f"Error extracting text from post no {post_id}. Text is: {input_text}. Exception is {e}")
         return_dict = {'full_string': full_string,
                        'quoted_list': quote_list,
@@ -390,6 +350,7 @@ class Extractor:
             else:
                 self.stat_df.at[thread_id, 'is_acyclic'] = False
         else:
+            #todo: change to exception
             print('Thread id not found. Please check if the provided thread id is correct.')
 
     def generate_edge_list(self, thread_id=None):
