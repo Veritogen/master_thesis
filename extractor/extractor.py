@@ -11,6 +11,7 @@ import logging
 from langdetect import detect
 from collections import namedtuple, defaultdict
 from lxml import html
+import numpy as np
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 tqdm.pandas()
 
@@ -152,14 +153,6 @@ class Extractor:
             self.extract_json(thread_tuple)
             if self.counter > batch_size:
                 temp_post_df = pd.DataFrame(columns=post_columns, data=self.post_list)
-                #todo: replace lambda with func + keywords
-                """temp_post_df[self.extract_from_post] = temp_post_df.swifter.set_ray_compute(
-                    num_cpus=6, memory=0.1).apply(lambda x:
-                                                                                  self.strip_text(input_text=x['com'],
-                                                                                                  post_id=x['no']),
-                                                                                  result_type='expand', axis=1)"""
-                #if not self.save_com:
-                #    temp_post_df = temp_post_df.drop(columns='com')
                 self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
                 self.post_list = []
                 temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
@@ -167,17 +160,29 @@ class Extractor:
                 self.stat_list = []
                 self.counter = 0
         temp_post_df = pd.DataFrame(columns=post_columns, data=self.post_list)
-
-        #if not self.save_com:
-        #    temp_post_df = temp_post_df.drop(columns='com')
         self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
-        self.post_df[self.extract_from_post] = self.post_df.progress_apply(
+        temp_post_df = None
+        if not self.save_com:
+            self.post_df = self.post_df.drop(columns='com')
+        """self.post_df[self.extract_from_post] = self.post_df.progress_apply(
             lambda x: self.strip_text(input_text=x['com'],
                                       post_id=x['no']),
-            result_type='expand', axis=1)
+            result_type='expand', axis=1)"""
         temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
         self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
 
+    def extract_text(self, no_partitions=4):
+        for i, x in enumerate(np.array_split(self.post_df, no_partitions)):
+            x.to_pickle(f"{self.out_path}/post_df_part_{i}")
+        self.post_df = None
+        for i in range(no_partitions):
+            temp_df = pd.read_pickle(f"{self.out_path}/post_df_part_{i}")
+            temp_df[self.extract_from_post] = temp_df.swifter.apply(lambda x: self.strip_text(input_text=x['com'],
+                                      post_id=x['no']), result_type='expand', axis=1)
+            temp_df.to_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
+        temp_df = None
+        self.post_df = pd.concat([pd.read_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
+                                  for i in range(no_partitions)])
 
     def thread_generator(self):
         if self.mode == 'pol_set':
@@ -314,20 +319,22 @@ class Extractor:
         """
         # initialize graph
         graph = nx.DiGraph()
+        thread_ids = np.array(df.thread_id, dtype=np.uint32)
         # iterate over DF filtered by the ID of the thread for which the graph is to be created
-        for index, row in self.post_df[self.post_df.thread_id == thread_id].iterrows():
+        for index, row in self.post_df[thread_ids == thread_id].iterrows():
             graph.add_node(index)
-            quote_list = self.post_df.at[index, 'quoted_list']
+            quote_list = row['quoted_list']
             # check if post ids have been quoted inside the post (visible as links on 4chan)
-            if len(quote_list) != 0:
+            post_id = row['no']
+            if quote_list:
                 # iterate over list of posts quoted/referred to
                 for quote in quote_list:
-                    graph.add_edge(index, int(quote))
+                    graph.add_edge(post_id, int(quote))
             else:
                 # as no ids have been quoted inside the post, a edge to the op will be created if the post isn't referring to a different thread
-                resto = self.post_df.at[index, 'resto']
+                resto = row['resto']
                 if resto != 0:
-                    graph.add_edge(index, resto)
+                    graph.add_edge(post_id, resto)
         return graph
 
     def save_gexf(self, thread_id, path, save_cyclic=False):
