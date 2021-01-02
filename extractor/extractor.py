@@ -1,7 +1,7 @@
 import os
 from collections import defaultdict
 import json
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import pandas as pd
 import swifter
 from bs4 import BeautifulSoup as bs
@@ -12,6 +12,7 @@ from langdetect import detect
 from collections import namedtuple, defaultdict
 from lxml import html
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
+tqdm.pandas()
 
 #todo: setup logger
 #todo: check for proper extraction (see chris project)
@@ -151,12 +152,14 @@ class Extractor:
             self.extract_json(thread_tuple)
             if self.counter > batch_size:
                 temp_post_df = pd.DataFrame(columns=post_columns, data=self.post_list)
-                temp_post_df[self.extract_from_post] = temp_post_df.swifter.apply(lambda x:
+                #todo: replace lambda with func + keywords
+                """temp_post_df[self.extract_from_post] = temp_post_df.swifter.set_ray_compute(
+                    num_cpus=6, memory=0.1).apply(lambda x:
                                                                                   self.strip_text(input_text=x['com'],
                                                                                                   post_id=x['no']),
-                                                                                  result_type='expand', axis=1)
-                if not self.save_com:
-                    temp_post_df = temp_post_df.drop(columns='com')
+                                                                                  result_type='expand', axis=1)"""
+                #if not self.save_com:
+                #    temp_post_df = temp_post_df.drop(columns='com')
                 self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
                 self.post_list = []
                 temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
@@ -164,12 +167,14 @@ class Extractor:
                 self.stat_list = []
                 self.counter = 0
         temp_post_df = pd.DataFrame(columns=post_columns, data=self.post_list)
-        temp_post_df[self.extract_from_post] = temp_post_df.swifter.apply(lambda x: self.strip_text(input_text=x['com'],
-                                                                                                    post_id=x['no']),
-                                                                          result_type='expand', axis=1)
-        if not self.save_com:
-            temp_post_df = temp_post_df.drop(columns='com')
+
+        #if not self.save_com:
+        #    temp_post_df = temp_post_df.drop(columns='com')
         self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
+        self.post_df[self.extract_from_post] = self.post_df.progress_apply(
+            lambda x: self.strip_text(input_text=x['com'],
+                                      post_id=x['no']),
+            result_type='expand', axis=1)
         temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
         self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
 
