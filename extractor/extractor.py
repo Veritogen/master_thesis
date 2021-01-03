@@ -174,6 +174,7 @@ class Extractor:
     def extract_text(self, no_partitions=4):
         for i, x in enumerate(np.array_split(self.post_df, no_partitions)):
             x.to_pickle(f"{self.out_path}/post_df_part_{i}")
+        self.post_df.to_pickle(f"{self.out_path}/post_df_raw")
         self.post_df = None
         for i in range(no_partitions):
             temp_df = pd.read_pickle(f"{self.out_path}/post_df_part_{i}")
@@ -183,6 +184,7 @@ class Extractor:
         temp_df = None
         self.post_df = pd.concat([pd.read_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
                                   for i in range(no_partitions)])
+        self.post_df.to_pickle(f"{self.out_path}/post_df_extracted")
 
     def thread_generator(self):
         if self.mode == 'pol_set':
