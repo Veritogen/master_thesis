@@ -172,18 +172,18 @@ class Extractor:
         self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
 
     def extract_text(self, no_partitions=4):
-        for i, x in enumerate(np.array_split(self.post_df, no_partitions)):
+        for i, x in enumerate(tqdm(np.array_split(self.post_df, no_partitions), desc="Saving dataframe chunks:")):
             x.to_pickle(f"{self.out_path}/post_df_part_{i}")
         self.post_df.to_pickle(f"{self.out_path}/post_df_raw")
         self.post_df = None
-        for i in range(no_partitions):
+        for i in tqdm(range(no_partitions), desc="Applying extraction:"):
             temp_df = pd.read_pickle(f"{self.out_path}/post_df_part_{i}")
             temp_df[self.extract_from_post] = temp_df.swifter.apply(lambda x: self.strip_text(input_text=x['com'],
                                       post_id=x['no']), result_type='expand', axis=1)
             temp_df.to_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
         temp_df = None
         self.post_df = pd.concat([pd.read_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
-                                  for i in range(no_partitions)])
+                                  for i in tqdm(range(no_partitions), desc="Concatenating extracted dfs:")])
         self.post_df.to_pickle(f"{self.out_path}/post_df_extracted")
 
     def thread_generator(self):
