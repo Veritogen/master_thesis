@@ -1,10 +1,8 @@
 import os
-from collections import defaultdict
 import json
 from tqdm.auto import tqdm
 import pandas as pd
 import swifter
-from bs4 import BeautifulSoup as bs
 import networkx as nx
 import warnings
 import logging
@@ -12,6 +10,8 @@ from langdetect import detect
 from collections import namedtuple, defaultdict
 from lxml import html
 import numpy as np
+import multiprocessing as mp
+
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 tqdm.pandas()
 
@@ -172,18 +172,19 @@ class Extractor:
         self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
 
     def extract_text(self, no_partitions=4):
-        for i, x in enumerate(tqdm(np.array_split(self.post_df, no_partitions), desc="Saving dataframe chunks:")):
-            x.to_pickle(f"{self.out_path}/post_df_part_{i}")
+        for i, df_chunk in enumerate(tqdm(np.array_split(self.post_df, no_partitions), desc="Saving dataframe chunks")):
+            df_chunk.to_pickle(f"{self.out_path}/post_df_part_{i}")
         self.post_df.to_pickle(f"{self.out_path}/post_df_raw")
         self.post_df = None
         for i in tqdm(range(no_partitions), desc="Applying extraction:"):
             temp_df = pd.read_pickle(f"{self.out_path}/post_df_part_{i}")
-            temp_df[self.extract_from_post] = temp_df.swifter.apply(lambda x: self.strip_text(input_text=x['com'],
+            temp_df[self.extract_from_post] = temp_df.swifter.set_npartitions(10)\
+                .apply(lambda x: self.strip_text(input_text=x['com'],
                                       post_id=x['no']), result_type='expand', axis=1)
             temp_df.to_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
         temp_df = None
         self.post_df = pd.concat([pd.read_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
-                                  for i in tqdm(range(no_partitions), desc="Concatenating extracted dfs:")])
+                                  for i in tqdm(range(no_partitions), desc="Concatenating extracted dfs")])
         self.post_df.to_pickle(f"{self.out_path}/post_df_extracted")
 
     def thread_generator(self):
@@ -321,7 +322,7 @@ class Extractor:
         """
         # initialize graph
         graph = nx.DiGraph()
-        thread_ids = np.array(df.thread_id, dtype=np.uint32)
+        thread_ids = np.array(self.post_df.thread_id, dtype=np.uint32)
         # iterate over DF filtered by the ID of the thread for which the graph is to be created
         for index, row in self.post_df[thread_ids == thread_id].iterrows():
             graph.add_node(index)
@@ -368,15 +369,16 @@ class Extractor:
         :param thread_id: Id of the thread to create the edge list for.
         :return: List of all edges of the thread network.
         """
+        thread_ids = np.array(self.post_df.thread_id, dtype=np.uint32)
         edge_list = []
-        for index, row in self.post_df[self.post_df.thread_id == thread_id].iterrows():
-            quotes_list = self.post_df.at[index, 'quoted_list']
-            resto = self.post_df.at[index, 'resto']
+        for index, row in self.post_df[thread_ids == thread_id].iterrows():
+            quotes_list = row['quoted_list']
+            resto = row['resto']
             if len(quotes_list) != 0:
                 for quote in quotes_list:
-                    edge_list.append([int(index), int(quote)])
+                    edge_list.append([row['no'], int(quote)])
             elif resto != 0:
-                edge_list.append([int(index), int(resto)])
+                edge_list.append([row['no'], int(resto)])
         return edge_list
 
     def create_gexfs(self, min_replies=275, max_replies=325, language='en'):
@@ -401,7 +403,11 @@ class Extractor:
             for thread_id in tqdm(thread_list, desc="Saving gexfs: "):
                 self.save_gexf(thread_id, path, save_cyclic=True)
 
-    def return_documents(self, text_column="own_text", min_replies=275, max_replies=325, language='en'):
+    def get_document_text(self, thread_id, text_column="full_string"):
+        thread_ids = np.array(self.post_df.thread_id, dtype=np.uint32)
+        return " ".join(self.post_df[text_column][thread_ids == thread_id].tolist())
+
+    def return_documents(self, text_column="full_string", min_replies=275, max_replies=325, language='en'):
         #todo: add option to not consider the language
         """
         Method to return a list of strings where each string is the text posted in a thread. Can consider different
@@ -413,8 +419,6 @@ class Extractor:
         :return: Returns a list of strings where each string is the text of a thread and a list of the thread ids,
         matching the documents.
         """
-        if not isinstance(self.post_df, pd.DataFrame) or not isinstance(self.stat_df, pd.DataFrame):
-            self.create_dfs()
         text_list = []
         if self.filter_cyclic:
             thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) &
@@ -428,21 +432,18 @@ class Extractor:
                                        (self.stat_df['language'] == language)
                                        ].index
         for thread_id in tqdm(thread_list, desc="Assembling text list."):
-            text_list.append(" ".join(self.post_df[text_column][self.post_df.thread_id == thread_id].tolist()))
+            text_list.append(self.get_document_text(thread_id))
         return text_list, thread_list
 
     def detect_lang(self):
         """
         Method to detect the languages of each thread in the collection.
         """
-        languages = []
-        for thread_id in tqdm(self.stat_df.index, desc='Detecting languages: '):
-            try:
-                languages.append(detect(" ".join(self.post_df['full_string']
-                                                 [self.post_df.thread_id == thread_id].tolist())))
-            except:
-                languages.append(None)
-        self.stat_df['language'] = languages
+        pool = mp.Pool()
+        results = [pool.apply_async(detect, (self.get_document_text(thread_id=thread_id),))
+                   for thread_id in tqdm(self.stat_df.index, desc='Detecting languages: ')]
+        results = [result.get() for result in tqdm(results)]
+        self.stat_df['language'] = results
 
     def save_df_pickles(self, path=None):
         """
