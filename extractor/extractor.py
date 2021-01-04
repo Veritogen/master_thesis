@@ -187,7 +187,7 @@ class Extractor:
         self.post_df = None
         for i in tqdm(range(no_chunks), desc="Applying extraction:"):
             temp_df = pd.read_pickle(f"{self.out_path}/post_df_part_{i}")
-            temp_df[self.extract_from_post] = temp_df.swifter.set_npartitions(10)\
+            temp_df[self.extract_from_post] = temp_df.swifter.set_npartitions(8)\
                 .apply(lambda x: self.strip_text(input_text=x['com'],
                                                  post_id=x['no']),
                        result_type='expand', axis=1)
