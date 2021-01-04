@@ -185,7 +185,7 @@ class Extractor:
         self.post_df.to_pickle(f"{self.out_path}/post_df_raw")
         self.stat_df.to_pickle(f"{self.out_path}/stat_df_raw")
 
-    def extract_text(self, no_chunks=4):
+    def extract_text(self, no_chunks=8):
         for i, df_chunk in enumerate(tqdm(np.array_split(self.post_df, no_chunks), desc="Saving dataframe chunks")):
             df_chunk.to_pickle(f"{self.out_path}/post_df_part_{i}")
         self.post_df = None
@@ -442,7 +442,6 @@ class Extractor:
         results_extracted = {result[0]: result[1] for result in results_extracted}
         result_list = [results_extracted[thread_id] for thread_id in self.stat_df.thread_id]
         self.stat_df['language'] = result_list
-
         self.stat_df.to_pickle(f"{self.out_path}/stat_df")
 
     def save_df_pickles(self, path=None):
