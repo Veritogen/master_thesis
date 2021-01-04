@@ -239,16 +239,13 @@ class Extractor:
                 self.stat_list.append(stat_temp)
             post_dict = {'thread_id': thread_tuple.thread_id,
                          'board': thread_tuple.board}
-            post_keys = set(post.keys)
+            post_keys = set(post.keys())
             for key in self.post_keys:
                 if key in post_keys:
                     post_dict[key] = post[key]
                 else:
                     post_dict[key] = None
-                if 'com' in post.keys():
-                    post_dict['com'] = post['com']
-                else:
-                    post_dict['com'] = ""
+            post_dict['com'] = post['com'] if 'com' in post_keys else ""
             post_dict['contains_attachment'] = True if 'md5' in post_keys else False
             temp_post_dict = {}
             for key in self.post_df_columns:
