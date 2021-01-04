@@ -239,14 +239,13 @@ class Extractor:
                 self.stat_list.append(stat_temp)
             post_dict = {'thread_id': thread_tuple.thread_id,
                          'board': thread_tuple.board}
-            post_keys = set(post.keys())
-            for key in self.post_keys:
-                if key in post_keys:
+            for key in post.keys():
+                if key in post.keys():
                     post_dict[key] = post[key]
                 else:
                     post_dict[key] = None
-            post_dict['com'] = post['com'] if 'com' in post_keys else ""
-            post_dict['contains_attachment'] = True if 'md5' in post_keys else False
+            post_dict['com'] = post['com'] if 'com' in post.keys() else ""
+            post_dict['contains_attachment'] = True if 'md5' in post.keys() else False
             temp_post_dict = {}
             for key in self.post_df_columns:
                 if key not in {'full_string', 'quoted_list', 'own_text', 'quote_string', 'dead_links'}:
