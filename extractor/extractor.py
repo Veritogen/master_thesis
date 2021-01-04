@@ -10,9 +10,12 @@ from langdetect import detect
 from collections import namedtuple, defaultdict
 from lxml import html
 import numpy as np
-from multiprocess import Pool
+import multiprocessing as mp
+from pathos.multiprocessing import ProcessPool
+import time
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 tqdm.pandas()
+
 
 #todo: setup logger
 #todo: check for proper extraction (see chris project)
@@ -142,6 +145,8 @@ class Extractor:
             post_columns.append(column)
         self.post_df_columns = post_columns
         self.post_df = pd.DataFrame(columns=post_columns)
+        for column in ['no', 'time', 'resto', 'thread_id']:
+            self.post_df[column] = self.post_df[column].astype(np.uint32)
         if not self.save_com:
             self.post_df = self.post_df.drop(columns='com')
         self.stat_df = pd.DataFrame(columns=self.relevant_stats)
@@ -153,6 +158,8 @@ class Extractor:
             self.extract_json(thread_tuple)
             if self.counter > batch_size:
                 temp_post_df = pd.DataFrame(columns=post_columns, data=self.post_list)
+                for column in ['no', 'time', 'resto', 'thread_id']:
+                    temp_post_df[column] = temp_post_df[column].astype(np.uint32)
                 self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
                 self.post_list = []
                 temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
@@ -160,6 +167,8 @@ class Extractor:
                 self.stat_list = []
                 self.counter = 0
         temp_post_df = pd.DataFrame(columns=post_columns, data=self.post_list)
+        for column in ['no', 'time', 'resto', 'thread_id']:
+            temp_post_df[column] = temp_post_df[column].astype(np.uint32)
         self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
         temp_post_df = None
         if not self.save_com:
@@ -180,9 +189,9 @@ class Extractor:
         self.post_df = None
         for i in tqdm(range(no_chunks), desc="Applying extraction:"):
             temp_df = pd.read_pickle(f"{self.out_path}/post_df_part_{i}")
-            temp_df[self.extract_from_post] = temp_df.swifter.set_npartitions(8)\
+            temp_df[self.extract_from_post] = temp_df.swifter.set_npartitions(10)\
                 .apply(lambda x: self.strip_text(input_text=x['com'],
-                                      post_id=x['no']), result_type='expand', axis=1)
+                                                 post_id=x['no']), result_type='expand', axis=1)
             temp_df.to_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
         temp_df = None
         self.post_df = pd.concat([pd.read_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
@@ -326,10 +335,10 @@ class Extractor:
         graph = nx.DiGraph()
         # iterate over DF filtered by the ID of the thread for which the graph is to be created
         for index, row in self.post_df[self.thread_id_of_posts == thread_id].iterrows():
-            graph.add_node(index)
+            post_id = row['no']
+            graph.add_node(post_id)
             quote_list = row['quoted_list']
             # check if post ids have been quoted inside the post (visible as links on 4chan)
-            post_id = row['no']
             if quote_list:
                 # iterate over list of posts quoted/referred to
                 for quote in quote_list:
@@ -340,29 +349,6 @@ class Extractor:
                 if resto != 0:
                     graph.add_edge(post_id, resto)
         return graph
-
-    def save_gexf(self, thread_id, path, save_cyclic=False):
-        #todo: remove print, set up log and exception.
-        """
-        Save the nx.DiGraph to a gexf file for further processing.
-        :param thread_id: Id of the thread to save, will be used to name the file.
-        :param path: Path to save the file to.
-        :param save_cyclic: Will determine if cyclic graphs are to be saved or not.
-        """
-        if thread_id in list(self.stat_df.index):
-            g = self.generate_network(thread_id)
-            is_acyclic = nx.algorithms.dag.is_directed_acyclic_graph(g)
-            if is_acyclic:
-                nx.write_gexf(g, f"{path}{thread_id}.gexf")
-                self.stat_df.at[thread_id, 'is_acyclic'] = True
-            elif not is_acyclic and save_cyclic:
-                nx.write_gexf(g, f"{path}{thread_id}.gexf")
-                self.stat_df.at[thread_id, 'is_acyclic'] = False
-            else:
-                self.stat_df.at[thread_id, 'is_acyclic'] = False
-        else:
-            #todo: change to exception
-            print('Thread id not found. Please check if the provided thread id is correct.')
 
     def generate_edge_list(self, thread_id=None):
         """
@@ -381,27 +367,26 @@ class Extractor:
                 edge_list.append([row['no'], int(resto)])
         return edge_list
 
-    def create_gexfs(self, min_replies=275, max_replies=325, language='en'):
+    def create_gexfs(self):
         #todo: add option to not consider the language
         # todo create gexf (b-mode or id-mode)
         """
         Method to save thread networks of all threads within the range of replies to a .gexf file. Will use the output
         path of the class to save the files there.
-        :param min_replies: Minimum number of replies within a thread to be saved.
-        :param max_replies: Maximum number of replies within a thread to be saved.
-        :param language: Consider only threads with the given language.
         """
-        path = f"{self.out_path}/gexfs/{min_replies}-{max_replies}/"
-        os.makedirs(path, exist_ok=True)
-        thread_list = self.stat_df[(self.stat_df['replies'] >= min_replies) &
-                                   (self.stat_df['replies'] <= max_replies) &
-                                   (self.stat_df['language'] == language)].index
-        if self.filter_cyclic:
-            for thread_id in tqdm(thread_list, desc="Saving gexfs: "):
-                self.save_gexf(thread_id, path)
-        else:
-            for thread_id in tqdm(thread_list, desc="Saving gexfs: "):
-                self.save_gexf(thread_id, path, save_cyclic=True)
+        for board in self.stat_df.board.unique():
+            os.makedirs(f"{self.out_path}/gexfs/{board}/", exist_ok=True)
+        cyclic_list = []
+        for index, row in tqdm(self.stat_df.iterrows(), desc='Saving gexf files'):
+            g = self.generate_network(row.thread_id)
+            is_acyclic = nx.algorithms.dag.is_directed_acyclic_graph(g)
+            if is_acyclic:
+                cyclic_list.append(True)
+            else:
+                cyclic_list.append(False)
+            nx.write_gexf(g, f"{self.out_path}/gexfs/{row.board}/{row.thread_id}.gexf")
+        self.stat_df['is_acyclic'] = cyclic_list
+        self.stat_df.to_pickle(f"{self.out_path}/stat_df")
 
     def get_document_text(self, thread_id, text_column="full_string"):
         return " ".join(self.post_df[text_column][self.thread_id_of_posts == thread_id].tolist())
@@ -434,15 +419,30 @@ class Extractor:
             text_list.append(self.get_document_text(thread_id))
         return text_list, thread_list
 
+    def lang_detect_wrapper(self, thread_id, text):
+        try:
+            return thread_id, detect(text)
+        except:
+            logging.exception(f"Couldn't detect language for thread no: {thread_id}")
+            return thread_id, None
+
     def detect_lang(self):
         """
         Method to detect the languages of each thread in the collection.
         """
-        pool = Pool(12)
-        results = [pool.map_async(detect, (self.get_document_text(thread_id=thread_id),))
-                   for thread_id in tqdm(self.stat_df.thread_id, desc='Detecting languages: ')]
-        results_extracted = [result.get(timeout=1) for result in results]
-        self.stat_df['language'] = results_extracted
+        pool = ProcessPool(nodes=12)
+        documents = [self.get_document_text(thread_id=thread_id)
+                     for thread_id in tqdm(self.stat_df.thread_id,
+                                           desc='Creating document list')]
+        results = pool.amap(self.lang_detect_wrapper, list(self.stat_df.thread_id), documents)
+        while not results.ready():
+            time.sleep(5)
+            print(".", end=' ')
+        results_extracted = results.get()
+        results_extracted = {result[0]: result[1] for result in results_extracted}
+        result_list = [results_extracted[thread_id] for thread_id in self.stat_df.thread_id]
+        self.stat_df['language'] = result_list
+
         self.stat_df.to_pickle(f"{self.out_path}/stat_df_langs")
 
     def save_df_pickles(self, path=None):
