@@ -28,14 +28,14 @@ def return_one(path):
     return thread_id, graph_features
 
 
-def return_from_list(id_list, path):
+def return_from_list(path_list):
     """
     Function to extract the features of certain graphs, where the id's are provided.
     :param id_list: List of thread ids of the .gexf-files in which the graphs are saved.
     :param path: Path to the directory, in which the .gexf-files are stored.
     :return: Dictionary with the thread ids as keys and the graph features as values.
     """
-    path_list = [f"{path}{thread_id}.gexf" for thread_id in id_list]
+    path_list = path_list
     pool = mp.Pool(processes=11)
     results = [pool.apply_async(return_one, (path_to_file,)) for path_to_file in tqdm(path_list)]
     results = [result.get() for result in tqdm(results)]
