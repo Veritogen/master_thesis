@@ -143,10 +143,12 @@ class Extractor:
             self.extract_from_post.append('dead_links')
         for column in ['thread_id']:
             post_columns.append(column)
+        post_columns.append('contains_attachment')
         self.post_df_columns = post_columns
         self.post_df = pd.DataFrame(columns=post_columns)
         for column in ['no', 'time', 'resto', 'thread_id']:
             self.post_df[column] = self.post_df[column].astype(np.uint32)
+        self.post_df['contains_attachment'] = self.post_df['contains_attachment'].astype(np.bool)
         if not self.save_com:
             self.post_df = self.post_df.drop(columns='com')
         self.stat_df = pd.DataFrame(columns=self.relevant_stats)
@@ -237,8 +239,9 @@ class Extractor:
                 self.stat_list.append(stat_temp)
             post_dict = {'thread_id': thread_tuple.thread_id,
                          'board': thread_tuple.board}
+            post_keys = set(post.keys)
             for key in self.post_keys:
-                if key in post.keys():
+                if key in post_keys:
                     post_dict[key] = post[key]
                 else:
                     post_dict[key] = None
@@ -246,6 +249,7 @@ class Extractor:
                     post_dict['com'] = post['com']
                 else:
                     post_dict['com'] = ""
+            post_dict['contains_attachment'] = True if 'md5' in post_keys else False
             temp_post_dict = {}
             for key in self.post_df_columns:
                 if key not in {'full_string', 'quoted_list', 'own_text', 'quote_string', 'dead_links'}:
