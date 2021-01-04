@@ -443,7 +443,7 @@ class Extractor:
         result_list = [results_extracted[thread_id] for thread_id in self.stat_df.thread_id]
         self.stat_df['language'] = result_list
 
-        self.stat_df.to_pickle(f"{self.out_path}/stat_df_langs")
+        self.stat_df.to_pickle(f"{self.out_path}/stat_df")
 
     def save_df_pickles(self, path=None):
         """
