@@ -175,10 +175,6 @@ class Extractor:
         temp_post_df = None
         if not self.save_com:
             self.post_df = self.post_df.drop(columns='com')
-        """self.post_df[self.extract_from_post] = self.post_df.progress_apply(
-            lambda x: self.strip_text(input_text=x['com'],
-                                      post_id=x['no']),
-            result_type='expand', axis=1)"""
         temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
         self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
         self.thread_id_of_posts = np.array(self.post_df.thread_id, dtype=np.uint32)
@@ -191,9 +187,10 @@ class Extractor:
         self.post_df = None
         for i in tqdm(range(no_chunks), desc="Applying extraction:"):
             temp_df = pd.read_pickle(f"{self.out_path}/post_df_part_{i}")
-            temp_df[self.extract_from_post] = temp_df.swifter.set_npartitions(10)\
-                .apply(lambda x: self.strip_text(input_text=x['com'],
-                                                 post_id=x['no']), result_type='expand', axis=1)
+            temp_df[self.extract_from_post] = temp_df.swifter.set_npartitions(10).set_ray_compute(
+                num_cpus=mp.cpu_count()/2,memory=0.5).apply(lambda x: self.strip_text(input_text=x['com'],
+                                                                                      post_id=x['no']),
+                                                            result_type='expand', axis=1)
             temp_df.to_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
         temp_df = None
         self.post_df = pd.concat([pd.read_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
