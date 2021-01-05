@@ -38,10 +38,11 @@ def return_from_list(path_list):
     """
     path_list = path_list
     pool = mp.Pool(processes=mp.cpu_count())
-    results = [pool.apply_async(return_one, (path_to_file,)) for path_to_file in tqdm(path_list, desc="Extracting graph"
-                                                                                                      "features")]
-    results = [result.get() for result in tqdm(results)]
-    feature_dict = {result[0]: result[1] for result in tqdm(results)}
+    results = [pool.apply_async(return_one, (path_to_file,)) for path_to_file in tqdm(path_list,
+                                                                                      desc="Adding tasks to multiproce"
+                                                                                           "ssing pool")]
+    results = [result.get() for result in tqdm(results, desc="Retrieving results from multiprocessing pool")]
+    feature_dict = {result[0]: result[1] for result in tqdm(results, desc="Creating dictionary of features")}
     return feature_dict
 
 
