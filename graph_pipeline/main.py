@@ -36,7 +36,7 @@ def return_from_list(path_list):
     :return: Dictionary with the thread ids as keys and the graph features as values.
     """
     path_list = path_list
-    pool = mp.Pool(processes=11)
+    pool = mp.Pool(processes=mp.cpu_count())
     results = [pool.apply_async(return_one, (path_to_file,)) for path_to_file in tqdm(path_list)]
     results = [result.get() for result in tqdm(results)]
     feature_dict = {result[0]: result[1] for result in tqdm(results)}
@@ -50,7 +50,7 @@ def return_all(path):
     :return: Dictionary with the thread ids as keys and the graph features as values.
     """
     path_list = glob.glob(f"{path}*.gexf")
-    pool = mp.Pool(processes=11)
+    pool = mp.Pool(processes=mp.cpu_count())
     results = [pool.apply_async(return_one, (path_to_file,)) for path_to_file in tqdm(path_list)]
     results = [result.get() for result in tqdm(results)]
     feature_dict = {result[0]: result[1] for result in tqdm(results)}
