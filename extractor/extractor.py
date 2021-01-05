@@ -278,7 +278,6 @@ class Extractor:
             try:
                 doc = html.fromstring(input_text)
             except Exception as e:
-                #todo: change to logging
                 logging.exception(f"Error creating lxml doc from given text. Post no: {post_id}. Text is: {input_text}."
                                   f" Exception is {e}")
                 return_dict = {'full_string': full_string,
@@ -313,7 +312,8 @@ class Extractor:
                         full_string = f"{full_string}{element.attrib['alt']} "
             except Exception as e:
                 #todo: change to logging
-                print(f"Error extracting text from post no {post_id}. Text is: {input_text}. Exception is {e}")
+                logging.exception(f"Error extracting text from post no {post_id}. Text is: {input_text}. "
+                                  f"Exception is {e}")
         return_dict = {'full_string': full_string,
                        'quoted_list': quote_list,
                        'quote_string': quote_string,
