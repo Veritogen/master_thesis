@@ -181,15 +181,15 @@ class Extractor:
         self.post_df.to_pickle(f"{self.out_path}/post_df_raw")
         self.stat_df.to_pickle(f"{self.out_path}/stat_df_raw")
 
-    def extract_text(self, no_chunks=8):
+    def extract_text(self, no_chunks=4):
         for i, df_chunk in enumerate(tqdm(np.array_split(self.post_df, no_chunks), desc="Saving dataframe chunks")):
             df_chunk.to_pickle(f"{self.out_path}/post_df_part_{i}")
         self.post_df = None
         for i in tqdm(range(no_chunks), desc="Applying extraction:"):
             temp_df = pd.read_pickle(f"{self.out_path}/post_df_part_{i}")
-            temp_df[self.extract_from_post] = temp_df.progress_apply(lambda x: self.strip_text(input_text=x['com'],
-                                                                                               post_id=x['no']),
-                       result_type='expand', axis=1)
+            temp_df[self.extract_from_post] = temp_df.swifter.apply(lambda x: self.strip_text(input_text=x['com'],
+                                                                                              post_id=x['no']),
+                                                                    result_type='expand', axis=1)
             temp_df.to_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
         temp_df = None
         self.post_df = pd.concat([pd.read_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
