@@ -2,7 +2,6 @@ import os
 import json
 from tqdm.auto import tqdm
 import pandas as pd
-import swifter
 import networkx as nx
 import warnings
 import logging
@@ -149,8 +148,6 @@ class Extractor:
         for column in ['no', 'time', 'resto', 'thread_id']:
             self.post_df[column] = self.post_df[column].astype(np.uint32)
         self.post_df['contains_attachment'] = self.post_df['contains_attachment'].astype(np.bool)
-        if not self.save_com:
-            self.post_df = self.post_df.drop(columns='com')
         self.stat_df = pd.DataFrame(columns=self.relevant_stats)
         if self.mode == 'legacy':
             logging.debug("Extracting information from files collected from 4chan API.")
@@ -173,8 +170,6 @@ class Extractor:
             temp_post_df[column] = temp_post_df[column].astype(np.uint32)
         self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
         temp_post_df = None
-        if not self.save_com:
-            self.post_df = self.post_df.drop(columns='com')
         temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
         self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
         self.thread_id_of_posts = np.array(self.post_df.thread_id, dtype=np.uint32)
@@ -190,6 +185,8 @@ class Extractor:
             temp_df[self.extract_from_post] = temp_df.apply(lambda x: self.strip_text(input_text=x['com'],
                                                                                       post_id=x['no']),
                                                             result_type='expand', axis=1)
+            if not self.save_com:
+                self.post_df = self.post_df.drop(columns='com')
             temp_df.to_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
         temp_df = None
         self.post_df = pd.concat([pd.read_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
