@@ -186,7 +186,7 @@ class Extractor:
                                                                                       post_id=x['no']),
                                                             result_type='expand', axis=1)
             if not self.save_com:
-                self.post_df = self.post_df.drop(columns='com')
+                temp_df = temp_df.drop(columns='com')
             temp_df.to_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
         temp_df = None
         self.post_df = pd.concat([pd.read_pickle(f"{self.out_path}/post_df_extracted_part_{i}")
