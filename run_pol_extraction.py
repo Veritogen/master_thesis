@@ -6,7 +6,7 @@ from nlpipe import NlPipe
 import pickle
 
 e = extractor.Extractor()
-e.load(mode='pol_set', file_name='pol_dataset/pol_shuf_1000.ndjson', out_path="pol_extracted_sample")
+e.load(mode='pol_set', file_name='pol_shuf_1000.ndjson', out_path="pol_extracted_sample")
 e.extract(save_com=False, save_full_text=True, batch_size=10000000)
 e.extract_text()
 e.detect_lang()
