@@ -10,7 +10,6 @@ from collections import namedtuple, defaultdict
 from lxml import html
 import numpy as np
 import multiprocessing as mp
-from pathos.multiprocessing import ProcessPool
 import time
 warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
 tqdm.pandas()
