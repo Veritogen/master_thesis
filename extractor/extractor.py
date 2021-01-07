@@ -316,6 +316,23 @@ class Extractor:
                        }
         return [return_dict[post_info] for post_info in self.extract_from_post]
 
+    def generate_edge_list(self, thread_id=None):
+        """
+        Method to create a list of edges of a graph network of a given thread.
+        :param thread_id: Id of the thread to create the edge list for.
+        :return: List of all edges of the thread network.
+        """
+        edge_list = []
+        for index, row in self.post_df[self.thread_id_of_posts == thread_id].iterrows():
+            quotes_list = row['quoted_list']
+            resto = row['resto']
+            if len(quotes_list) != 0:
+                for quote in quotes_list:
+                    edge_list.append([row['no'], int(quote)])
+            elif resto != 0:
+                edge_list.append([row['no'], int(resto)])
+        return edge_list
+
     def generate_network(self, thread_id):
         #todo: change from using at to use of row.resto/row.quoted_list
         """
@@ -342,23 +359,6 @@ class Extractor:
                     graph.add_edge(post_id, resto)
         return graph
 
-    def generate_edge_list(self, thread_id=None):
-        """
-        Method to create a list of edges of a graph network of a given thread.
-        :param thread_id: Id of the thread to create the edge list for.
-        :return: List of all edges of the thread network.
-        """
-        edge_list = []
-        for index, row in self.post_df[self.thread_id_of_posts == thread_id].iterrows():
-            quotes_list = row['quoted_list']
-            resto = row['resto']
-            if len(quotes_list) != 0:
-                for quote in quotes_list:
-                    edge_list.append([row['no'], int(quote)])
-            elif resto != 0:
-                edge_list.append([row['no'], int(resto)])
-        return edge_list
-
     def create_gexfs(self):
         #todo: add option to not consider the language
         # todo create gexf (b-mode or id-mode)
@@ -368,9 +368,24 @@ class Extractor:
         """
         for board in self.stat_df.board.unique():
             os.makedirs(f"{self.out_path}/gexfs/{board}/", exist_ok=True)
+        graph_dict = {}
+        for thread_id in self.stat_df.thread_id:
+            graph_dict[thread_id] = {}
+        for tup in self.post_df.itertuples():
+            graph_dict[tup.thread_id][tup.no] = tuple(tup.quoted_list) if tup.quoted_list else tup.resto
         cyclic_list = []
         for index, row in tqdm(self.stat_df.iterrows(), desc='Saving gexf files'):
-            g = self.generate_network(row.thread_id)
+            g = nx.DiGraph()
+            thread_dict = graph_dict[row.thread_id]
+            for post_no in thread_dict.keys():
+                g.add_node(post_no)
+                relations = thread_dict[post_no]
+                if isinstance(relations, tuple):
+                    for rel in relations:
+                        g.add_edge(post_no, rel)
+                else:
+                    if relations != 0:
+                        g.add_edge(post_no, relations)
             is_acyclic = nx.algorithms.dag.is_directed_acyclic_graph(g)
             if is_acyclic:
                 cyclic_list.append(True)
