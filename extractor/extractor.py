@@ -423,17 +423,11 @@ class Extractor:
         """
         Method to detect the languages of each thread in the collection.
         """
-        pool = ProcessPool(nodes=12)
-        documents = [self.get_document_text(thread_id=thread_id)
-                     for thread_id in tqdm(self.stat_df.thread_id,
-                                           desc='Creating document list')]
-        results = pool.amap(self.lang_detect_wrapper, list(self.stat_df.thread_id), documents)
-        while not results.ready():
-            time.sleep(5)
-            print(".", end=' ')
-        results_extracted = results.get()
-        results_extracted = {result[0]: result[1] for result in results_extracted}
-        result_list = [results_extracted[thread_id] for thread_id in self.stat_df.thread_id]
+        result_list = []
+        for thread_id in self.stat_df.thread_id:
+            t_id, language = self.lang_detect_wrapper(thread_id=thread_id,
+                                                      text=self.get_document_text(thread_id=thread_id))
+            result_list.append(language)
         self.stat_df['language'] = result_list
         self.stat_df.to_pickle(f"{self.out_path}/stat_df")
 
