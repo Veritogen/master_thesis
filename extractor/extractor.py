@@ -424,7 +424,7 @@ class Extractor:
         Method to detect the languages of each thread in the collection.
         """
         result_list = []
-        for thread_id in self.stat_df.thread_id:
+        for thread_id in tqdm(self.stat_df.thread_id, desc='Detecting languages'):
             t_id, language = self.lang_detect_wrapper(thread_id=thread_id,
                                                       text=self.get_document_text(thread_id=thread_id))
             result_list.append(language)
