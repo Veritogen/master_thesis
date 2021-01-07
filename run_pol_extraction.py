@@ -21,7 +21,7 @@ e.load(mode='pol_set', file_name='pol_062016-112019_labeled.ndjson', out_path="p
 logging.basicConfig(filename=f'{e.out_path}/extraction_log.log', filemode='a',
                             format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG)
 e.extract(save_com=False, save_full_text=True, batch_size=10000000)
-e.extract_text(no_chunks=1)
+e.extract_text(no_chunks=4)
 
 text_dict = {thread_id: "" for thread_id in e.stat_df.thread_id}
 for iter_tup in e.post_df.itertuples():
