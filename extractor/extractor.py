@@ -158,7 +158,7 @@ class Extractor:
         else:
             try:
                 self.post_df = pd.read_pickle(f"{self.out_path}/post_df_extracted")
-                self.stat_df = pd.read_pickle(f"{self.out_path}/stat_df_extracted")
+                self.stat_df = pd.read_pickle(f"{self.out_path}/stat_df")
                 logging.info(f"Loading of already extracted cleaned data successful.")
             except:
                 self.extract_text()
