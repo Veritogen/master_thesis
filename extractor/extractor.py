@@ -143,7 +143,19 @@ class Extractor:
             post_columns.append(column)
         post_columns.append('contains_attachment')
         self.post_df_columns = post_columns
-        self.post_df = pd.DataFrame(columns=post_columns)
+        if not os.path.exists(f"{self.out_path}/post_df_raw"):
+            self.extract_dfs(batch_size=batch_size)
+        else:
+            try:
+                self.post_df = pd.read_pickle(f"{self.out_path}/post_df_raw")
+                self.stat_df = pd.read_pickle(f"{self.out_path}/stat_df_raw")
+                logging.info(f"Loading of already extracted data successful.")
+            except:
+                self.extract_dfs(batch_size=batch_size)
+        self.thread_id_of_posts = np.array(self.post_df.thread_id, dtype=np.uint32)
+
+    def extract_dfs(self, batch_size=10000000):
+        self.post_df = pd.DataFrame(columns=self.post_df_columns)
         for column in ['no', 'time', 'resto', 'thread_id']:
             self.post_df[column] = self.post_df[column].astype(np.uint32)
         self.post_df['contains_attachment'] = self.post_df['contains_attachment'].astype(np.bool)
@@ -155,23 +167,22 @@ class Extractor:
         for thread_tuple in tqdm(self.thread_generator()):
             self.extract_json(thread_tuple)
             if self.counter > batch_size:
-                temp_post_df = pd.DataFrame(columns=post_columns, data=self.post_list)
+                temp_post_df = pd.DataFrame(columns=self.post_df_columns, data=self.post_list)
                 for column in ['no', 'time', 'resto', 'thread_id']:
                     temp_post_df[column] = temp_post_df[column].astype(np.uint32)
-                self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
+                self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy=False)
                 self.post_list = []
                 temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
-                self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
+                self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy=False)
                 self.stat_list = []
                 self.counter = 0
-        temp_post_df = pd.DataFrame(columns=post_columns, data=self.post_list)
+        temp_post_df = pd.DataFrame(columns=self.post_df_columns, data=self.post_list)
         for column in ['no', 'time', 'resto', 'thread_id']:
             temp_post_df[column] = temp_post_df[column].astype(np.uint32)
-        self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy= False)
+        self.post_df = pd.concat([self.post_df, temp_post_df], ignore_index=True, copy=False)
         temp_post_df = None
         temp_stat_df = pd.DataFrame(columns=self.relevant_stats, data=self.stat_list)
-        self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy= False)
-        self.thread_id_of_posts = np.array(self.post_df.thread_id, dtype=np.uint32)
+        self.stat_df = pd.concat([self.stat_df, temp_stat_df], ignore_index=True, copy=False)
         self.post_df.to_pickle(f"{self.out_path}/post_df_raw")
         self.stat_df.to_pickle(f"{self.out_path}/stat_df_raw")
 

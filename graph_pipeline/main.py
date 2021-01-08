@@ -29,18 +29,20 @@ def return_one(path):
     return thread_id, graph_features
 
 
-def return_from_list(path_list):
+def return_from_list(path_list, no_processes=None):
     """
     Function to extract the features of certain graphs, where the id's are provided.
     :param id_list: List of thread ids of the .gexf-files in which the graphs are saved.
     :param path: Path to the directory, in which the .gexf-files are stored.
     :return: Dictionary with the thread ids as keys and the graph features as values.
     """
+    if no_processes is None:
+        no_processes = mp.cpu_count()
     path_list = path_list
-    pool = mp.Pool(processes=mp.cpu_count())
-    results = [pool.apply_async(return_one, (path_to_file,)) for path_to_file in tqdm(path_list,
-                                                                                      desc="Adding tasks to multiproce"
-                                                                                           "ssing pool")]
+    pool = mp.Pool(processes=no_processes)
+    results = [pool.apply_async(return_one, (path_to_file,))
+               for path_to_file in tqdm(path_list,
+                                        desc="Adding graph feature calculation tasks to multiprocessing pool")]
     results = [result.get() for result in tqdm(results, desc="Retrieving results from multiprocessing pool")]
     feature_dict = {result[0]: result[1] for result in tqdm(results, desc="Creating dictionary of features")}
     return feature_dict
