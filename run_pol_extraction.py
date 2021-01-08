@@ -5,7 +5,17 @@ import multiprocessing as mp
 from tqdm.auto import tqdm
 import logging
 from langdetect import detect
-from lxml import html
+import os
+
+
+def extract_graphs():
+    path_list = []
+    for index, row in e.stat_df.iterrows():
+        path_list.append(f"{e.out_path}/gexfs/{row.board}/{row.thread_id}.gexf")
+    graph_parameters = return_from_list(path_list, no_processes=24)
+    graph_features_all = pd.DataFrame(graph_parameters).transpose()
+    graph_features_all['board'] = e.stat_df.set_index('thread_id').board
+    graph_features_all.to_pickle(f"{e.out_path}/graph_features_all")
 
 
 def lang_detect_wrapper(thread_id, text):
@@ -23,8 +33,6 @@ e.load(mode='pol_set', file_name='pol_062016-112019_labeled.ndjson', out_path="p
 logging.basicConfig(filename=f'{e.out_path}/extraction_log.log', filemode='a',
                             format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG)
 e.extract(save_com=False, save_full_text=True, batch_size=10000000)
-e.extract_text(no_chunks=4)
-
 text_dict = {thread_id: "" for thread_id in e.stat_df.thread_id}
 for iter_tup in e.post_df.itertuples():
     if isinstance(iter_tup.full_string, str):
@@ -45,11 +53,11 @@ text_df.columns = ['thread_id', 'full_text']
 text_df.to_pickle(f"{e.out_path}text_df")
 e.create_gexfs()
 
-path_list = []
-for index, row in e.stat_df.iterrows():
-    path_list.append(f"{e.out_path}/gexfs/{row.board}/{row.thread_id}.gexf")
-graph_parameters = return_from_list(path_list, no_processes=no_processes)
-graph_features_all = pd.DataFrame(graph_parameters).transpose()
-graph_features_all['board'] = e.stat_df.set_index('thread_id').board
-graph_features_all.to_pickle(f"{e.out_path}/graph_features_all")
 
+if not os.path.exists(f"{e.out_path}/graph_features_all"):
+    extract_graphs()
+else:
+    try:
+        graph_features = pd.read_pickle(f"{e.out_path}/graph_features_all")
+    except:
+        extract_graphs()

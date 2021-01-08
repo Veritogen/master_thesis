@@ -149,10 +149,19 @@ class Extractor:
             try:
                 self.post_df = pd.read_pickle(f"{self.out_path}/post_df_raw")
                 self.stat_df = pd.read_pickle(f"{self.out_path}/stat_df_raw")
-                logging.info(f"Loading of already extracted data successful.")
+                logging.info(f"Loading of already extracted raw data successful.")
             except:
                 self.extract_dfs(batch_size=batch_size)
         self.thread_id_of_posts = np.array(self.post_df.thread_id, dtype=np.uint32)
+        if not os.path.exists(f"{self.out_path}/post_df_extracted"):
+            self.extract_text()
+        else:
+            try:
+                self.post_df = pd.read_pickle(f"{self.out_path}/post_df_extracted")
+                self.stat_df = pd.read_pickle(f"{self.out_path}/stat_df_extracted")
+                logging.info(f"Loading of already extracted cleaned data successful.")
+            except:
+                self.extract_text()
 
     def extract_dfs(self, batch_size=10000000):
         self.post_df = pd.DataFrame(columns=self.post_df_columns)
