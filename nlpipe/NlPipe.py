@@ -90,11 +90,11 @@ class NlPipe:
         if component not in self.pipe_disable:
             self.pipe_disable.append(component)
 
-    def preprocess_spacy(self):
+    def preprocess_spacy(self, load_existing=True):
         """
         Method to preprocess the documents using spacy with the enabled pipeline components.
         """
-        if os.path.exists(f"{self.path}/text_df_preprocessed"):
+        if os.path.exists(f"{self.path}/text_df_preprocessed") and load_existing:
             preprocessed_df = pd.read_pickle(f"{self.path}/text_df_preprocessed_spacy")
             self.spacy_docs = preprocessed_df['preprocessed_text']
         else:
@@ -113,12 +113,12 @@ class NlPipe:
             temp_df.columns = ['thread_id', 'preprocessed_text']
             temp_df.to_pickle(f"{self.path}text_df_preprocessed_spacy")
 
-    def preprocess(self):
+    def preprocess(self, load_existing=True):
         """
         Remove stop words, numbers and punctation as well as lower case all of the tokens, depending on the settings
         passed to the class during initialization.
         """
-        if os.path.exists(f"{self.path}/text_df_preprocessed"):
+        if os.path.exists(f"{self.path}/text_df_preprocessed") and load_existing:
             preprocessed_df = pd.read_pickle(f"{self.path}/text_df_preprocessed")
             self.preprocessed_docs = preprocessed_df['preprocessed_text']
         else:
@@ -134,7 +134,7 @@ class NlPipe:
                     elif token.is_stop:
                         continue
                     else:
-                        word = token.text
+                        word = token.lemma_
                     if self.set_lower:
                         word = word.lower()
                     if self.remove_num:
