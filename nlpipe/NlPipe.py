@@ -20,7 +20,7 @@ class NlPipe:
     def __init__(self, list_of_docs, path, document_ids=None, language_model="en_core_web_lg", tagger=False,
                  parser=False, ner=False, categorization=False, remove_stopwords=True, remove_punctuation=True,
                  set_lower=True, remove_num=True, expand_stopwords=True, language_detection=False,
-                 allowed_languages=frozenset({'en'})):
+                 allowed_languages=frozenset({'en'}), no_processes=None):
         """
         :param list_of_docs: List of strings where every document is one string.
         :param document_ids: The ids of the documents, matching the order of the list_of_docs
@@ -62,7 +62,10 @@ class NlPipe:
         self.preprocessed_docs = None
         self.bag_of_words = None
         self.preprocessing_batch_size = 50000
-        self.processes = psutil.cpu_count(logical=False) - 1
+        if no_processes is None:
+            self.processes = psutil.cpu_count(logical=False) - 1
+        else:
+            self.processes = no_processes
         self.lda_model = None
         self.result_df = None
         self.word_topic_df = None

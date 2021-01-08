@@ -22,5 +22,5 @@ else:
     text_df.columns = ['thread_id', 'full_text']
     text_df.to_pickle(f"{path}text_df")
 
-nlp = NlPipe.NlPipe(texts,path=path, document_ids=thread_ids)
+nlp = NlPipe.NlPipe(texts,path=path, document_ids=thread_ids, no_processes=10)
 nlp.preprocess()
