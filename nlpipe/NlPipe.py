@@ -94,17 +94,24 @@ class NlPipe:
         """
         Method to preprocess the documents using spacy with the enabled pipeline components.
         """
-        if self.language_detection:
-            self.spacy_docs = [doc for doc in tqdm(self.nlp.pipe(self.input_docs, disable=self.pipe_disable,
-                                                                 n_process=self.processes,
-                                                                 batch_size=self.preprocessing_batch_size),
-                                                   desc="Preprocessing text with spacy: ")
-                               if detect(doc.text) in self.allowed_languages]
+        if os.path.exists(f"{self.path}/text_df_preprocessed"):
+            preprocessed_df = pd.read_pickle(f"{self.path}/text_df_preprocessed_spacy")
+            self.spacy_docs = preprocessed_df['preprocessed_text']
         else:
-            self.spacy_docs = []
-            for doc in self.nlp.pipe(self.input_docs, disable=self.pipe_disable, n_process=self.processes,
-                                     batch_size=self.preprocessing_batch_size):
-                self.spacy_docs.append(doc)
+            if self.language_detection:
+                self.spacy_docs = [doc for doc in tqdm(self.nlp.pipe(self.input_docs, disable=self.pipe_disable,
+                                                                     n_process=self.processes,
+                                                                     batch_size=self.preprocessing_batch_size),
+                                                       desc="Preprocessing text with spacy: ")
+                                   if detect(doc.text) in self.allowed_languages]
+            else:
+                self.spacy_docs = []
+                for doc in tqdm(self.nlp.pipe(self.input_docs, disable=self.pipe_disable, n_process=self.processes,
+                                              batch_size=self.preprocessing_batch_size), desc="Preprocessing spacy"):
+                    self.spacy_docs.append(doc)
+            temp_df = pd.DataFrame([self.document_ids, self.spacy_docs]).transpose()
+            temp_df.columns = ['thread_id', 'preprocessed_text']
+            temp_df.to_pickle(f"{self.path}text_df_preprocessed_spacy")
 
     def preprocess(self):
         """
@@ -112,7 +119,7 @@ class NlPipe:
         passed to the class during initialization.
         """
         if os.path.exists(f"{self.path}/text_df_preprocessed"):
-            preprocessed_df = pd.read_pickle()
+            preprocessed_df = pd.read_pickle(f"{self.path}/text_df_preprocessed")
             self.preprocessed_docs = preprocessed_df['preprocessed_text']
         else:
             self.preprocessed_docs = []
@@ -137,8 +144,10 @@ class NlPipe:
                     if len(word) >= 2 and word != "wbr":
                         doc.append(word)
                 self.preprocessed_docs.append(doc)
-                pd.DataFrame([self.document_ids, self.preprocessed_docs]).\
-                    transpose().to_pickle(f"{self.path}text_df_preprocessed")
+            temp_df = pd.DataFrame([self.document_ids, self.preprocessed_docs]).\
+                transpose()
+            temp_df.columns = ['thread_id', 'preprocessed_text']
+            temp_df.to_pickle(f"{self.path}/text_df_preprocessed")
 
     def create_bag_of_words(self, filter_extremes=True, min_df=5, max_df=0.5, keep_n=100000, keep_tokens=None,
                             use_phrases=None, bigram_min_count=1000, bigram_threshold=100, trigram_threshold=100):
