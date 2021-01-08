@@ -1,10 +1,10 @@
 import spacy
 import re
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import gensim.corpora as corpora
 from gensim.models.phrases import Phrases, Phraser
 from gensim.models.ldamulticore import LdaMulticore
-from gensim.models import CoherenceModel
+from gensim.models import CoherenceModel, TfidfModel
 import pyLDAvis
 import pyLDAvis.gensim
 import pandas as pd
@@ -13,12 +13,14 @@ from collections import Counter, OrderedDict
 import seaborn as sns
 import matplotlib.pyplot as plt
 from langdetect import detect
-
+import psutil
+import os
 
 class NlPipe:
-    def __init__(self, list_of_docs, document_ids=None, language_model="en_core_web_lg", tagger=False, parser=False,
-                 ner=False, categorization=False, remove_stopwords=True, remove_punctuation=True, set_lower=True,
-                 remove_num=True, expand_stopwords=True, language_detection=False, allowed_languages=frozenset({'en'})):
+    def __init__(self, list_of_docs, path, document_ids=None, language_model="en_core_web_lg", tagger=False,
+                 parser=False, ner=False, categorization=False, remove_stopwords=True, remove_punctuation=True,
+                 set_lower=True, remove_num=True, expand_stopwords=True, language_detection=False,
+                 allowed_languages=frozenset({'en'})):
         """
         :param list_of_docs: List of strings where every document is one string.
         :param document_ids: The ids of the documents, matching the order of the list_of_docs
@@ -50,6 +52,7 @@ class NlPipe:
         self.set_lower = set_lower
         self.input_docs = list_of_docs
         self.document_ids = document_ids
+        self.use_gpu = spacy.prefer_gpu()
         self.nlp = spacy.load(language_model)
         if expand_stopwords:
             stops = [stop for stop in self.nlp.Defaults.stop_words]
@@ -58,8 +61,8 @@ class NlPipe:
         self.spacy_docs = None
         self.preprocessed_docs = None
         self.bag_of_words = None
-        self.preprocessing_batch_size = 500
-        self.processes = 6
+        self.preprocessing_batch_size = 50000
+        self.processes = psutil.cpu_count(logical=False) - 1
         self.lda_model = None
         self.result_df = None
         self.word_topic_df = None
@@ -67,6 +70,7 @@ class NlPipe:
         self.language_detection = language_detection
         self.id2word = None
         self.coherence_dict = None
+        self.path = path
 
     def enable_pipe_component(self, component):
         """
@@ -97,40 +101,47 @@ class NlPipe:
                                                    desc="Preprocessing text with spacy: ")
                                if detect(doc.text) in self.allowed_languages]
         else:
-            self.spacy_docs = list(self.nlp.pipe(self.input_docs, disable=self.pipe_disable,
-                                                                 n_process=self.processes,
-                                                                 batch_size=self.preprocessing_batch_size))
+            self.spacy_docs = []
+            for doc in self.nlp.pipe(self.input_docs, disable=self.pipe_disable, n_process=self.processes,
+                                     batch_size=self.preprocessing_batch_size):
+                self.spacy_docs.append(doc)
 
     def preprocess(self):
         """
         Remove stop words, numbers and punctation as well as lower case all of the tokens, depending on the settings
         passed to the class during initialization.
         """
-        self.preprocessed_docs = []
-        if not self.spacy_docs:
-            self.preprocess_spacy()
-        for spacy_doc in tqdm(self.spacy_docs, desc="Removing stop words/punctuation/numeric chars: "):
-            doc = []
-            for token in spacy_doc:
-                # todo: check if useful condition
-                if not self.remove_stop_words and token.is_stop:
-                    word = token.text
-                elif token.is_stop:
-                    continue
-                else:
-                    word = token.text
-                if self.set_lower:
-                    word = word.lower()
-                if self.remove_num:
-                    word = re.sub(r"[\d]", "", word)
-                if self.remove_punctuation:
-                    word = re.sub(r"[\W]", "", word)
-                if len(word) >= 2 and word != "wbr":
-                    doc.append(word)
-            self.preprocessed_docs.append(doc)
+        if os.path.exists(f"{self.path}/text_df_preprocessed"):
+            preprocessed_df = pd.read_pickle()
+            self.preprocessed_docs = preprocessed_df['preprocessed_text']
+        else:
+            self.preprocessed_docs = []
+            if not self.spacy_docs:
+                self.preprocess_spacy()
+            for spacy_doc in tqdm(self.spacy_docs, desc="Removing stop words/punctuation/numeric chars: "):
+                doc = []
+                for token in spacy_doc:
+                    # todo: check if useful condition
+                    if not self.remove_stop_words and token.is_stop:
+                        word = token.text
+                    elif token.is_stop:
+                        continue
+                    else:
+                        word = token.text
+                    if self.set_lower:
+                        word = word.lower()
+                    if self.remove_num:
+                        word = re.sub(r"[\d]", "", word)
+                    if self.remove_punctuation:
+                        word = re.sub(r"[\W]", "", word)
+                    if len(word) >= 2 and word != "wbr":
+                        doc.append(word)
+                self.preprocessed_docs.append(doc)
+                pd.DataFrame([self.document_ids, self.preprocessed_docs]).\
+                    transpose().to_pickle(f"{self.path}text_df_preprocessed")
 
     def create_bag_of_words(self, filter_extremes=True, min_df=5, max_df=0.5, keep_n=100000, keep_tokens=None,
-                            use_phrases=None, bigram_min_count=10, bigram_threshold=100, trigram_threshold=100):
+                            use_phrases=None, bigram_min_count=1000, bigram_threshold=100, trigram_threshold=100):
         """
         :param filter_extremes: En-/Disable filtering of tokens that occur too frequent/not frequent enough
         (https://radimrehurek.com/gensim/corpora/dictionary.html)
@@ -178,8 +189,7 @@ class NlPipe:
     def create_tfidf(self):
         pass
 
-
-    def create_lda_model(self, no_topics=10, random_state=42, alpha='symmetric'):
+    def create_lda_model(self, no_topics=10, random_state=42, passes=10, alpha='auto', eta='auto'):
         """
         :param no_topics: Number of topics that are to be explored by lda model
         :param random_state: Random state for reproducible results (default 42, gensim default is None)
@@ -187,10 +197,10 @@ class NlPipe:
         """
         if self.bag_of_words is None:
             self.create_bag_of_words()
-        self.lda_model = LdaMulticore(corpus=self.bag_of_words, id2word=self.id2word, num_topics=no_topics,
-                                      workers=self.processes, random_state=random_state, alpha=alpha)
+        self.lda_model = LdaMulticore(corpus=self.bag_of_words, id2word=self.id2word, num_topics=no_topics, eta=eta,
+                                      workers=self.processes, random_state=random_state, alpha=alpha, passes=passes)
 
-    def calculate_coherence(self, model=None):
+    def calculate_coherence(self, model=None, coherence_score='c_v'):
         """
         Method to calculate the coherence score of a given lda model. The model can either be provided or will be taken
         from the class.
@@ -201,11 +211,12 @@ class NlPipe:
             model = self.lda_model
         else:
             model = model
-        coherence_model = CoherenceModel(model=model, texts=self.preprocessed_docs, dictionary=self.id2word)
+        coherence_model = CoherenceModel(model=model, texts=self.preprocessed_docs, dictionary=self.id2word,
+                                         coherence=coherence_score)
         return coherence_model
 
-    def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas=[0.1], save_best_model=True,
-                          save_models=False, return_best_model=False):
+    def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas='auto', etas='auto',
+                          save_best_model=True, save_models=False, return_best_model=False):
         #todo: save best model within class.
         """
         Method to search for the best lda model for a given number of topics. The best model will be determined by its
@@ -220,6 +231,8 @@ class NlPipe:
         model.
         :return: Number of topics for the best result and the model with the best result of the coherence score
         """
+        hyperparameter_dict = {}
+
         if return_best_model and not save_best_model:
             raise Exception("To return the best model, the parameter save_best_model has to be set to True.")
         self.coherence_dict = {}
@@ -227,7 +240,7 @@ class NlPipe:
         for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
             self.coherence_dict[no_topics] = {}
             for alpha in alphas:
-                self.create_lda_model(no_topics=no_topics, alpha=alpha)
+                self.create_lda_model(no_topics=no_topics, alpha=alpha, eta=eta)
                 coherence_model = self.calculate_coherence()
                 coherence_score = coherence_model.get_coherence()
                 if save_models:
