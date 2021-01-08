@@ -12,15 +12,20 @@ if os.path.exists(f"{path}text_df"):
     text_df = pd.read_pickle(f"{path}text_df")
     texts = text_df.full_text.to_list()
     thread_ids = text_df.thread_id.to_list()
+    text_df = None
 else:
     thread_ids = stat_df.thread_id.to_list()
     post_df = pd.read_pickle(f"{path}post_df_extracted")
-    thread_id_of_posts = np.array(post_df.thread_id, dtype=np.uint32)
-    texts = [" ".join(post_df.full_string[thread_id_of_posts == thread_id].tolist()) for thread_id in thread_ids]
+    text_dict = {thread_id: "" for thread_id in stat_df.thread_id}
+    for iter_tup in tqdm(post_df.itertuples(), desc="merging posts to a doc for each thread"):
+        if isinstance(iter_tup.full_string, str):
+            text_dict[iter_tup.thread_id] = text_dict[iter_tup.thread_id] + iter_tup.full_string
     post_df = None
+    texts = [text_dict[thread_id] for thread_id in thread_ids]
     text_df = pd.DataFrame([thread_ids, texts]).transpose()
     text_df.columns = ['thread_id', 'full_text']
     text_df.to_pickle(f"{path}text_df")
+    text_df = None
 
 nlp = NlPipe.NlPipe(texts,path=path, document_ids=thread_ids, no_processes=10)
 nlp.preprocess()
