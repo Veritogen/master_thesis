@@ -93,7 +93,7 @@ class NlPipe:
         if component not in self.pipe_disable:
             self.pipe_disable.append(component)
 
-    def preprocess_spacy(self, load_existing=True):
+    def preprocess_spacy(self, load_existing=True, save_data=True):
         """
         Method to preprocess the documents using spacy with the enabled pipeline components.
         """
@@ -112,9 +112,10 @@ class NlPipe:
                 for doc in tqdm(self.nlp.pipe(self.input_docs, disable=self.pipe_disable, n_process=self.processes,
                                               batch_size=self.preprocessing_batch_size), desc="Preprocessing spacy"):
                     self.spacy_docs.append(doc)
-            temp_df = pd.DataFrame([self.document_ids, self.spacy_docs]).transpose()
-            temp_df.columns = ['thread_id', 'preprocessed_text']
-            temp_df.to_pickle(f"{self.path}text_df_preprocessed_spacy")
+            if save_data:
+                temp_df = pd.DataFrame([self.document_ids, self.spacy_docs]).transpose()
+                temp_df.columns = ['thread_id', 'preprocessed_text']
+                temp_df.to_pickle(f"{self.path}text_df_preprocessed_spacy")
 
     def preprocess(self, load_existing=True):
         """

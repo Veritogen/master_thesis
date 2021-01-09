@@ -28,4 +28,5 @@ else:
     text_df = None
 
 nlp = NlPipe.NlPipe(texts,path=path, document_ids=thread_ids, no_processes=1)
+nlp.preprocess_spacy(load_existing=False, save_data=False)
 nlp.preprocess()
