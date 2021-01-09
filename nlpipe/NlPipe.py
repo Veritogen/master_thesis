@@ -99,7 +99,7 @@ class NlPipe:
         """
         if os.path.exists(f"{self.path}/text_df_preprocessed") and load_existing:
             preprocessed_df = pd.read_pickle(f"{self.path}/text_df_preprocessed_spacy")
-            self.spacy_docs = preprocessed_df['preprocessed_text']
+            self.spacy_docs = preprocessed_df['preprocessed_text'].to_list()
         else:
             if self.language_detection:
                 self.spacy_docs = [doc for doc in tqdm(self.nlp.pipe(self.input_docs, disable=self.pipe_disable,
@@ -124,7 +124,7 @@ class NlPipe:
         """
         if os.path.exists(f"{self.path}/text_df_preprocessed") and load_existing:
             preprocessed_df = pd.read_pickle(f"{self.path}/text_df_preprocessed")
-            self.preprocessed_docs = preprocessed_df['preprocessed_text']
+            self.preprocessed_docs = preprocessed_df['preprocessed_text'].to_list()
         else:
             self.preprocessed_docs = []
             if not self.spacy_docs:
