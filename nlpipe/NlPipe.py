@@ -128,13 +128,16 @@ class NlPipe:
         passed to the class during initialization.
         """
         if os.path.exists(f"{self.path}/text_df_preprocessed") and load_existing:
+            print("Found preprocessed data. Loading")
             preprocessed_df = pd.read_pickle(f"{self.path}/text_df_preprocessed")
             if filter_loaded is None:
                 self.preprocessed_docs = preprocessed_df['preprocessed_text'].to_list()
+                print('Preprocessed data loaded.')
             else:
                 self.preprocessed_docs = preprocessed_df['preprocessed_text'].loc[filter_loaded].to_list()
                 if isinstance(self.document_ids, np.ndarray):
                     self.document_ids = self.document_ids[filter_loaded]
+            print('Preprocessed data loaded.')
         else:
             self.preprocessed_docs = []
             if not self.spacy_docs:
