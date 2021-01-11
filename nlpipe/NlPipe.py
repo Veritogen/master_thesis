@@ -16,6 +16,7 @@ from langdetect import detect
 import psutil
 import os
 
+
 class NlPipe:
     def __init__(self, list_of_docs, path, document_ids=None, language_model="en_core_web_lg", tagger=False,
                  parser=False, ner=False, categorization=False, remove_stopwords=True, remove_punctuation=True,
@@ -93,13 +94,16 @@ class NlPipe:
         if component not in self.pipe_disable:
             self.pipe_disable.append(component)
 
-    def preprocess_spacy(self, load_existing=True, save_data=True):
+    def preprocess_spacy(self, load_existing=True, save_data=True, filter_loaded=None):
         """
         Method to preprocess the documents using spacy with the enabled pipeline components.
         """
         if os.path.exists(f"{self.path}/text_df_preprocessed") and load_existing:
             preprocessed_df = pd.read_pickle(f"{self.path}/text_df_preprocessed_spacy")
-            self.spacy_docs = preprocessed_df['preprocessed_text'].to_list()
+            if filter_loaded is None:
+                self.spacy_docs = preprocessed_df['preprocessed_text'].to_list()
+            else:
+                self.spacy_docs = preprocessed_df['preprocessed_text'].loc[filter_loaded].to_list()
         else:
             if self.language_detection:
                 self.spacy_docs = [doc for doc in tqdm(self.nlp.pipe(self.input_docs, disable=self.pipe_disable,
@@ -117,14 +121,17 @@ class NlPipe:
                 temp_df.columns = ['thread_id', 'preprocessed_text']
                 temp_df.to_pickle(f"{self.path}text_df_preprocessed_spacy")
 
-    def preprocess(self, load_existing=True):
+    def preprocess(self, load_existing=True, filter_loaded=None):
         """
         Remove stop words, numbers and punctation as well as lower case all of the tokens, depending on the settings
         passed to the class during initialization.
         """
         if os.path.exists(f"{self.path}/text_df_preprocessed") and load_existing:
             preprocessed_df = pd.read_pickle(f"{self.path}/text_df_preprocessed")
-            self.preprocessed_docs = preprocessed_df['preprocessed_text'].to_list()
+            if filter_loaded is None:
+                self.preprocessed_docs = preprocessed_df['preprocessed_text'].to_list()
+            else:
+                self.preprocessed_docs = preprocessed_df['preprocessed_text'].loc[filter_loaded].to_list()
         else:
             self.preprocessed_docs = []
             if not self.spacy_docs:
@@ -184,6 +191,7 @@ class NlPipe:
 
         if not self.preprocessed_docs:
             self.preprocess()
+        #todo: add auto check for existing dictionary here.
         if use_phrases == "bigram" or use_phrases == "trigram":
             bigram_phrases = Phrases(self.preprocessed_docs, min_count=bigram_min_count,
                                      threshold=bigram_threshold)
@@ -195,8 +203,10 @@ class NlPipe:
             trigram_phraser = Phraser(trigram_phrases)
             self.preprocessed_docs = [trigram_phraser[bigram_phraser[doc]] for doc in self.preprocessed_docs]
         self.id2word = corpora.Dictionary(self.preprocessed_docs)
+        #todo: add autosave of dictionary here
         if filter_extremes:
             self.id2word.filter_extremes(no_below=min_df, no_above=max_df, keep_n=keep_n, keep_tokens=keep_tokens)
+            #todo:add autosave filter_dict here
         self.bag_of_words = [self.id2word.doc2bow(doc) for doc in self.preprocessed_docs]
 
     def create_tfidf(self):
@@ -218,6 +228,7 @@ class NlPipe:
         Method to calculate the coherence score of a given lda model. The model can either be provided or will be taken
         from the class.
         :param model: Model to use instead of the model saved within the class.
+        :param coherence_score: Coherence score to calculate
         :return: Return coherence model, which also contains the coherence score of a model.
         """
         if model is None:
@@ -328,3 +339,18 @@ class NlPipe:
             model = self.lda_model
         panel = pyLDAvis.gensim.prepare(model, self.bag_of_words, self.id2word)
         pyLDAvis.show(panel)
+
+    def print_bow(self, doc_positions):
+        print([[self.id2word[token_id], freq] for token_id, freq in self.bag_of_words[doc_positions]])
+
+    def save_model(self):
+        pass
+
+    def load_model(self):
+        pass
+
+    def save_dict(self):
+        pass
+
+    def load_dict(self):
+        pass
