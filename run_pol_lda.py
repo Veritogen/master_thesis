@@ -27,7 +27,7 @@ filter_array = np.logical_and(stat_df.thread_id.isin(text_df.sample(frac=0.3, we
                               stat_df.replies > 10)
 for max_df in tqdm([0.3, 0.2, 0.1], desc="max df"):
     nlp.preprocess(load_existing=True, filter_loaded=filter_array)
-    nlp.create_bag_of_words(max_df=max_df, use_phrases='trigram')
+    nlp.create_bag_of_words(max_df=max_df, use_phrases='bigram')
     nlp.search_best_model(topic_list=[50, 100, 150, 200, 250, 300])
 
 try:

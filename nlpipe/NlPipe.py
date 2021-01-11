@@ -200,11 +200,13 @@ class NlPipe:
                                      threshold=bigram_threshold)
             bigram_phraser = Phraser(bigram_phrases)
             if use_phrases == "bigram":
-                self.preprocessed_docs = [bigram_phraser[doc] for doc in self.preprocessed_docs]
+                self.preprocessed_docs = [bigram_phraser[doc] for doc in
+                                          tqdm(self.preprocessed_docs, desc="Extracting bigrams")]
         if use_phrases == "trigram":
             trigram_phrases = Phrases(bigram_phrases[self.preprocessed_docs], threshold=trigram_threshold)
             trigram_phraser = Phraser(trigram_phrases)
-            self.preprocessed_docs = [trigram_phraser[bigram_phraser[doc]] for doc in self.preprocessed_docs]
+            self.preprocessed_docs = [trigram_phraser[bigram_phraser[doc]]
+                                      for doc in tqdm(self.preprocessed_docs, desc="Extracting trigrams")]
         self.id2word = corpora.Dictionary(self.preprocessed_docs)
         #todo: add autosave of dictionary here
         if filter_extremes:
