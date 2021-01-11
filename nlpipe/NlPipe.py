@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from langdetect import detect
 import psutil
 import os
+from itertools import compress
 
 
 class NlPipe:
@@ -52,7 +53,7 @@ class NlPipe:
         self.remove_num = remove_num
         self.set_lower = set_lower
         self.input_docs = list_of_docs
-        self.document_ids = document_ids
+        self.document_ids = np.array(document_ids)
         self.use_gpu = spacy.prefer_gpu()
         self.nlp = spacy.load(language_model)
         if expand_stopwords:
@@ -132,6 +133,8 @@ class NlPipe:
                 self.preprocessed_docs = preprocessed_df['preprocessed_text'].to_list()
             else:
                 self.preprocessed_docs = preprocessed_df['preprocessed_text'].loc[filter_loaded].to_list()
+                if isinstance(self.document_ids, np.ndarray):
+                    self.document_ids = self.document_ids[filter_loaded]
         else:
             self.preprocessed_docs = []
             if not self.spacy_docs:
@@ -212,7 +215,7 @@ class NlPipe:
     def create_tfidf(self):
         pass
 
-    def create_lda_model(self, no_topics=10, random_state=42, passes=10, alpha='auto', eta='auto'):
+    def create_lda_model(self, no_topics=10, random_state=42, passes=5, alpha='auto', eta='auto'):
         """
         :param no_topics: Number of topics that are to be explored by lda model
         :param random_state: Random state for reproducible results (default 42, gensim default is None)
@@ -223,7 +226,7 @@ class NlPipe:
         self.lda_model = LdaMulticore(corpus=self.bag_of_words, id2word=self.id2word, num_topics=no_topics, eta=eta,
                                       workers=self.processes, random_state=random_state, alpha=alpha, passes=passes)
 
-    def calculate_coherence(self, model=None, coherence_score='c_v'):
+    def calculate_coherence(self, model=None, coherence_score='c_uci'):
         """
         Method to calculate the coherence score of a given lda model. The model can either be provided or will be taken
         from the class.
@@ -235,12 +238,17 @@ class NlPipe:
             model = self.lda_model
         else:
             model = model
-        coherence_model = CoherenceModel(model=model, texts=self.preprocessed_docs, dictionary=self.id2word,
-                                         coherence=coherence_score)
+        if coherence_score != 'u_mass':
+            coherence_model = CoherenceModel(model=model, texts=self.preprocessed_docs, dictionary=self.id2word,
+                                             coherence=coherence_score)
+        else:
+            coherence_model = CoherenceModel(model=model, corpus=self.bag_of_words, dictionary=self.id2word,
+                                             coherence=coherence_score)
         return coherence_model
 
-    def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas='auto', etas='auto',
-                          save_best_model=True, save_models=False, return_best_model=False):
+    def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas=[0.9, 0.5, 0.1],
+                          etas=['auto', 0.9, 0.5, 0.1], save_best_model=True, save_models=False,
+                          return_best_model=False, passes = 5):
         #todo: save best model within class.
         """
         Method to search for the best lda model for a given number of topics. The best model will be determined by its
@@ -262,21 +270,22 @@ class NlPipe:
         self.coherence_dict = {}
         best_score = 0
         for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
-            self.coherence_dict[no_topics] = {}
             for alpha in alphas:
-                self.create_lda_model(no_topics=no_topics, alpha=alpha, eta=eta)
-                coherence_model = self.calculate_coherence()
-                coherence_score = coherence_model.get_coherence()
-                if save_models:
-                    self.coherence_dict[no_topics][alpha] = {"lda_model": self.lda_model,
-                                                             "coherence_model": coherence_model,
-                                                             "coherence_score": coherence_score}
-                else:
-                    self.coherence_dict[no_topics][alpha] = {"coherence_score": coherence_score}
-                if save_best_model and coherence_score > best_score:
-                    best_score = coherence_score
-                    best_model = self.lda_model
-                    best_topic_no = no_topics
+                for eta in etas:
+                    self.create_lda_model(no_topics=no_topics, alpha=alpha, eta=eta, passes=passes)
+                    coherence_model = self.calculate_coherence()
+                    coherence_score = coherence_model.get_coherence()
+                    if save_models:
+                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}"] = {
+                            "lda_model": self.lda_model,
+                            "coherence_model": coherence_model,
+                            "coherence_score": coherence_score}
+                    else:
+                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}"] = {"coherence_score": coherence_score}
+                    if save_best_model and coherence_score > best_score:
+                        best_score = coherence_score
+                        best_model = self.lda_model
+                        best_topic_no = no_topics
         if return_best_model:
             #returns number of topics and the lda_model
             return best_topic_no, best_model
@@ -341,7 +350,8 @@ class NlPipe:
         pyLDAvis.show(panel)
 
     def print_bow(self, doc_positions):
-        print([[self.id2word[token_id], freq] for token_id, freq in self.bag_of_words[doc_positions]])
+        print([[(self.id2word[token_id], freq) for token_id, freq in doc]
+               for doc in compress(self.bag_of_words, doc_positions)])
 
     def save_model(self):
         pass
