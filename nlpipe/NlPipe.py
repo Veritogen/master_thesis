@@ -212,7 +212,8 @@ class NlPipe:
         if filter_extremes:
             self.id2word.filter_extremes(no_below=min_df, no_above=max_df, keep_n=keep_n, keep_tokens=keep_tokens)
             #todo:add autosave filter_dict here
-        self.bag_of_words = [self.id2word.doc2bow(doc) for doc in self.preprocessed_docs]
+        self.bag_of_words = [self.id2word.doc2bow(doc)
+                             for doc in tqdm(self.preprocessed_docs, desc='Creating bag of words')]
 
     def create_tfidf(self):
         pass
