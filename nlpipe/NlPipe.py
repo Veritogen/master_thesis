@@ -210,6 +210,7 @@ class NlPipe:
             trigram_phraser = Phraser(trigram_phrases)
             self.preprocessed_docs = [trigram_phraser[bigram_phraser[doc]]
                                       for doc in tqdm(self.preprocessed_docs, desc="Extracting trigrams")]
+        print('Creating dictionary.')
         self.id2word = corpora.Dictionary(self.preprocessed_docs)
         #todo: add autosave of dictionary here
         if filter_extremes:
@@ -254,7 +255,7 @@ class NlPipe:
 
     def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas=[0.9, 0.5, 0.1],
                           etas=['auto', 0.9, 0.5, 0.1], save_best_model=True, save_models=False,
-                          return_best_model=False, passes = 5):
+                          return_best_model=False, passes = 1):
         #todo: save best model within class.
         """
         Method to search for the best lda model for a given number of topics. The best model will be determined by its
@@ -276,8 +277,8 @@ class NlPipe:
         self.coherence_dict = {}
         best_score = 0
         for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
-            for alpha in alphas:
-                for eta in etas:
+            for alpha in tqdm(alphas, desc='Alphas'):
+                for eta in tqdm(etas, desc='Etas'):
                     self.create_lda_model(no_topics=no_topics, alpha=alpha, eta=eta, passes=passes)
                     coherence_model = self.calculate_coherence()
                     coherence_score = coherence_model.get_coherence()
