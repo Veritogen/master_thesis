@@ -5,7 +5,7 @@ import os
 import pickle
 from tqdm.auto import tqdm
 
-path = "pol_extracted_sample/"
+path = "pol_extracted/"
 stat_df = pd.read_pickle(f"{path}stat_df")
 if os.path.exists(f"{path}text_df"):
     print("text df found. loading.")
