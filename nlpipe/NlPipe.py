@@ -74,8 +74,14 @@ class NlPipe:
         self.allowed_languages = allowed_languages
         self.language_detection = language_detection
         self.id2word = None
-        self.coherence_dict = None
+        self.coherence_dict = {}
         self.path = path
+        self.max_df = None
+        self.min_df = None
+        self.use_phrases = None
+        self.filter_extremes = None
+        self.keep_n = None
+        self.keep_tokens = None
 
     def enable_pipe_component(self, component):
         """
@@ -167,7 +173,8 @@ class NlPipe:
             temp_df.to_pickle(f"{self.path}/text_df_preprocessed")
 
     def create_bag_of_words(self, filter_extremes=True, min_df=5, max_df=0.5, keep_n=100000, keep_tokens=None,
-                            use_phrases=None, bigram_min_count=1000, bigram_threshold=100, trigram_threshold=100):
+                            use_phrases=None, bigram_min_count=1000, bigram_threshold=100, trigram_threshold=100,
+                            load_existing=True):
         """
         :param filter_extremes: En-/Disable filtering of tokens that occur too frequent/not frequent enough
         (https://radimrehurek.com/gensim/corpora/dictionary.html)
@@ -177,7 +184,7 @@ class NlPipe:
         :param keep_tokens: Iterable of tokens not to be remove (see link above)
         :param use_phrases: Set to bigram or trigram if the use of Gensmin Phrases
         (https://radimrehurek.com/gensim/models/phrases.html) is wanted. Will create bigrams/trigrams of frequently
-        co-occuring words (e.g. "new", "york" => "new_york").
+        co-occuring words (e.g. "new", "york" => "new_yor)k").
         :param bigram_min_count: Minimum occurrence of bigrams to be considered by Gensmin Phrases.
         :param bigram_threshold: Threshold for Gensim Phrases bigram settings.
         :param trigram_threshold: Threshold for Gensim Phrases trigram settings.
@@ -197,27 +204,55 @@ class NlPipe:
 
         if not self.preprocessed_docs:
             self.preprocess()
-        #todo: add auto check for existing dictionary here.
-        if use_phrases == "bigram" or use_phrases == "trigram":
-            bigram_phrases = Phrases(self.preprocessed_docs, min_count=bigram_min_count,
-                                     threshold=bigram_threshold)
-            bigram_phraser = Phraser(bigram_phrases)
-            if use_phrases == "bigram":
-                self.preprocessed_docs = [bigram_phraser[doc] for doc in
-                                          tqdm(self.preprocessed_docs, desc="Extracting bigrams")]
-        if use_phrases == "trigram":
-            trigram_phrases = Phrases(bigram_phrases[self.preprocessed_docs], threshold=trigram_threshold)
-            trigram_phraser = Phraser(trigram_phrases)
-            self.preprocessed_docs = [trigram_phraser[bigram_phraser[doc]]
-                                      for doc in tqdm(self.preprocessed_docs, desc="Extracting trigrams")]
-        print('Creating dictionary.')
-        self.id2word = corpora.Dictionary(self.preprocessed_docs)
-        #todo: add autosave of dictionary here
-        if filter_extremes:
-            self.id2word.filter_extremes(no_below=min_df, no_above=max_df, keep_n=keep_n, keep_tokens=keep_tokens)
-            #todo:add autosave filter_dict here
+        if os.path.exists(f"{self.path}/gensim_dict_{filter_extremes}_{min_df}_{max_df}_{use_phrases}") \
+                and load_existing:
+            self.load_dict(path=f"{self.path}/gensim_dict_{filter_extremes}_{min_df}_{max_df}_{use_phrases}")
+            self.filter_extremes = filter_extremes
+            self.min_df = min_df
+            self.max_df = max_df
+            self.use_phrases = use_phrases
+        else:
+            #todo: add auto check for existing dictionary here.
+            if use_phrases == "bigram" or use_phrases == "trigram":
+                self.create_bigrams(bigram_min_count=bigram_min_count, bigram_threshold=bigram_threshold)
+            if use_phrases == "trigram":
+                self.create_bigrams(bigram_min_count=bigram_min_count, bigram_threshold=bigram_threshold)
+                self.create_trigrams(trigram_threshold=trigram_threshold)
+            self.create_dictionary(filter_extremes=filter_extremes, min_df=min_df, max_df=max_df, keep_n=keep_n,
+                                   keep_tokens=keep_tokens, use_phrases=use_phrases)
+            self.create_bag_of_words_matrix()
+
+    def create_bigrams(self, bigram_min_count, bigram_threshold):
+        self.bigram_phrases = Phrases(self.preprocessed_docs, min_count=bigram_min_count,
+                                      threshold=bigram_threshold)
+        self.bigram_phraser = Phraser(self.bigram_phrases)
+        self.preprocessed_docs = [self.bigram_phraser[doc] for doc in
+                                  tqdm(self.preprocessed_docs, desc="Extracting bigrams")]
+
+    def create_trigrams(self, trigram_threshold):
+        trigram_phrases = Phrases(self.bigram_phrases[self.preprocessed_docs], threshold=trigram_threshold)
+        trigram_phraser = Phraser(trigram_phrases)
+        self.preprocessed_docs = [trigram_phraser[self.bigram_phraser[doc]]
+                                  for doc in tqdm(self.preprocessed_docs, desc="Extracting trigrams")]
+
+    def create_bag_of_words_matrix(self):
         self.bag_of_words = [self.id2word.doc2bow(doc)
                              for doc in tqdm(self.preprocessed_docs, desc='Creating bag of words')]
+
+    def create_dictionary(self, filter_extremes, min_df, max_df, keep_n, keep_tokens, use_phrases):
+        print('Creating dictionary.')
+        self.id2word = corpora.Dictionary(self.preprocessed_docs)
+        # todo: add autosave of dictionary here
+        self.max_df = max_df
+        self.min_df = min_df
+        self.use_phrases = use_phrases
+        self.filter_extremes = filter_extremes
+        self.keep_n = keep_n
+        self.keep_tokens = keep_tokens
+        if filter_extremes:
+            self.id2word.filter_extremes(no_below=self.min_df, no_above=self.max_df, keep_n=keep_n,
+                                         keep_tokens=keep_tokens)
+        self.save_dict(path=f"{self.path}/gensim_dict_{filter_extremes}_{min_df}_{max_df}_{use_phrases}")
 
     def create_tfidf(self):
         pass
@@ -247,15 +282,15 @@ class NlPipe:
             model = model
         if coherence_score != 'u_mass':
             coherence_model = CoherenceModel(model=model, texts=self.preprocessed_docs, dictionary=self.id2word,
-                                             coherence=coherence_score)
+                                             coherence=coherence_score, processes=self.processes)
         else:
             coherence_model = CoherenceModel(model=model, corpus=self.bag_of_words, dictionary=self.id2word,
-                                             coherence=coherence_score)
+                                             coherence=coherence_score, processes=self.processes)
         return coherence_model
 
     def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas=[0.9, 0.5, 0.1],
                           etas=['auto', 0.9, 0.5, 0.1], save_best_model=True, save_models=False,
-                          return_best_model=False, passes = 1):
+                          return_best_model=False, passes = 1, coherence_scores=['c_v']):
         #todo: save best model within class.
         """
         Method to search for the best lda model for a given number of topics. The best model will be determined by its
@@ -274,28 +309,49 @@ class NlPipe:
 
         if return_best_model and not save_best_model:
             raise Exception("To return the best model, the parameter save_best_model has to be set to True.")
-        self.coherence_dict = {}
-        best_score = 0
+        if self.coherence_dict and save_best_model:
+            try:
+                best_score = self.coherence_dict['best_score']
+            except:
+                best_score = 0
+        else:
+            best_score = 0
         for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
+            print(f"no_topics {no_topics}")
             for alpha in tqdm(alphas, desc='Alphas'):
+                print(f"a {alpha}")
                 for eta in tqdm(etas, desc='Etas'):
                     self.create_lda_model(no_topics=no_topics, alpha=alpha, eta=eta, passes=passes)
-                    coherence_model = self.calculate_coherence()
-                    coherence_score = coherence_model.get_coherence()
+                    self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes}" \
+                                        f"_min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}" \
+                                        f"_k_n-{self.keep_n}_k_t-{self.keep_tokens}"] = {}
                     if save_models:
-                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}"] = {
-                            "lda_model": self.lda_model,
-                            "coherence_model": coherence_model,
-                            "coherence_score": coherence_score}
-                    else:
-                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}"] = {"coherence_score": coherence_score}
-                    if save_best_model and coherence_score > best_score:
-                        best_score = coherence_score
-                        best_model = self.lda_model
-                        best_topic_no = no_topics
+                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes}" \
+                                            f"_min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}" \
+                                            f"_k_n-{self.keep_n}_k_t-{self.keep_tokens}"]["lda_model"] = self.lda_model
+                    for coherence_score in coherence_scores:
+                        coherence_model = self.calculate_coherence(coherence_score=coherence_score)
+                        coherence_result = coherence_model.get_coherence()
+                        if save_models:
+                            self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes}_" \
+                                                f"min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}_" \
+                                                f"k_n-{self.keep_n}_k_t-{self.keep_tokens}"]["coherence_model"] = \
+                                coherence_model
+                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes}_" \
+                                            f"min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}_" \
+                                            f"k_n-{self.keep_n}_k_t-{self.keep_tokens}"][coherence_score] \
+                            = coherence_result
+                        if save_best_model and coherence_result > best_score:
+                            self.coherence_dict["best_score"] = coherence_result
+                            self.coherence_dict["best_model"] = self.lda_model
+                            self.coherence_dict["best_topic_no"] = no_topics
+                            self.coherence_dict["best_alpha"] = alpha
+                            self.coherence_dict["best_eta"] = eta
+                        if coherence_result > best_score:
+                            best_score = coherence_result
         if return_best_model:
             #returns number of topics and the lda_model
-            return best_topic_no, best_model
+            return self.coherence_dict["best_topic_no"], self.coherence_dict["best_model"]
 
     def create_document_topic_df(self, model=None, no_topics=10):
         """
@@ -360,14 +416,15 @@ class NlPipe:
         print([[(self.id2word[token_id], freq) for token_id, freq in doc]
                for doc in compress(self.bag_of_words, doc_positions)])
 
-    def save_model(self):
-        pass
+    def save_model(self, path):
+        self.lda_model.save(path)
 
-    def load_model(self):
-        pass
+    def load_model(self, path):
+        self.lda_model = LdaMulticore.load(path)
 
-    def save_dict(self):
-        pass
+    def save_dict(self, path):
+        self.id2word.save(path)
+        print("dict saved")
 
-    def load_dict(self):
-        pass
+    def load_dict(self, path):
+        self.id2word = corpora.Dictionary.load(path)
