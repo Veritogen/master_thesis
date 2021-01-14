@@ -250,9 +250,17 @@ class NlPipe:
         self.keep_n = keep_n
         self.keep_tokens = keep_tokens
         if filter_extremes:
-            self.id2word.filter_extremes(no_below=self.min_df, no_above=self.max_df, keep_n=keep_n,
-                                         keep_tokens=keep_tokens)
+            self.filter_extremes(min_df = self.min_df, max_df=self.max_df, keep_n=self.keep_n,
+                                 keep_tokens=self.keep_tokens)
         self.save_dict(path=f"{self.path}/gensim_dict_{filter_extremes}_{min_df}_{max_df}_{use_phrases}")
+
+    def filter_extremes(self, min_df, max_df, keep_n, keep_tokens=[]):
+        self.max_df = max_df
+        self.min_df = min_df
+        self.keep_n = keep_n
+        self.keep_tokens = keep_tokens
+        self.id2word.filter_extremes(no_below=self.min_df, no_above=self.max_df, keep_n=keep_n,
+                                     keep_tokens=keep_tokens)
 
     def create_tfidf(self):
         pass
