@@ -317,9 +317,7 @@ class NlPipe:
         else:
             best_score = 0
         for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
-            print(f"no_topics {no_topics}")
             for alpha in tqdm(alphas, desc='Alphas'):
-                print(f"a {alpha}")
                 for eta in tqdm(etas, desc='Etas'):
                     self.create_lda_model(no_topics=no_topics, alpha=alpha, eta=eta, passes=passes)
                     self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes}" \
