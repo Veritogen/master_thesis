@@ -24,7 +24,7 @@ else:
 
 nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=36)
 filter_array = np.logical_and(stat_df.thread_id.isin(text_df.sample(frac=0.1, weights=stat_df.replies).thread_id),
-                              stat_df.replies > 10)
+                              stat_df.replies > 10, stat_df.language == 'en')
 nlp.preprocess(load_existing=True, filter_loaded=filter_array)
 for max_df in tqdm([0.3, 0.2, 0.1], desc="max df"):
     nlp.create_bag_of_words(max_df=max_df)
