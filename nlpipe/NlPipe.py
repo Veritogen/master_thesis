@@ -79,7 +79,7 @@ class NlPipe:
         self.max_df = None
         self.min_df = None
         self.use_phrases = None
-        self.filter_extremes = None
+        self.filter_extremes_value = None
         self.keep_n = None
         self.keep_tokens = None
 
@@ -207,7 +207,7 @@ class NlPipe:
         if os.path.exists(f"{self.path}/gensim_dict_{filter_extremes}_{min_df}_{max_df}_{use_phrases}") \
                 and load_existing:
             self.load_dict(path=f"{self.path}/gensim_dict_{filter_extremes}_{min_df}_{max_df}_{use_phrases}")
-            self.filter_extremes = filter_extremes
+            self.filter_extremes_value = filter_extremes
             self.min_df = min_df
             self.max_df = max_df
             self.use_phrases = use_phrases
@@ -246,7 +246,7 @@ class NlPipe:
         self.max_df = max_df
         self.min_df = min_df
         self.use_phrases = use_phrases
-        self.filter_extremes = filter_extremes
+        self.filter_extremes_value = filter_extremes
         self.keep_n = keep_n
         self.keep_tokens = keep_tokens
         if filter_extremes:
@@ -328,22 +328,22 @@ class NlPipe:
             for alpha in tqdm(alphas, desc='Alphas'):
                 for eta in tqdm(etas, desc='Etas'):
                     self.create_lda_model(no_topics=no_topics, alpha=alpha, eta=eta, passes=passes)
-                    self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes}" \
+                    self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes_value}" \
                                         f"_min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}" \
                                         f"_k_n-{self.keep_n}_k_t-{self.keep_tokens}"] = {}
                     if save_models:
-                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes}" \
+                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes_value}" \
                                             f"_min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}" \
                                             f"_k_n-{self.keep_n}_k_t-{self.keep_tokens}"]["lda_model"] = self.lda_model
                     for coherence_score in coherence_scores:
                         coherence_model = self.calculate_coherence(coherence_score=coherence_score)
                         coherence_result = coherence_model.get_coherence()
                         if save_models:
-                            self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes}_" \
+                            self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes_value}_" \
                                                 f"min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}_" \
                                                 f"k_n-{self.keep_n}_k_t-{self.keep_tokens}"]["coherence_model"] = \
                                 coherence_model
-                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes}_" \
+                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes_value}_" \
                                             f"min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}_" \
                                             f"k_n-{self.keep_n}_k_t-{self.keep_tokens}"][coherence_score] \
                             = coherence_result
