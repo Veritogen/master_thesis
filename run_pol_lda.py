@@ -27,7 +27,7 @@ filter_array = np.logical_and(stat_df.thread_id.isin(text_df.sample(frac=0.1, we
                               stat_df.replies > 10)
 filter_array = np.logical_and(filter_array, stat_df.language == 'en')
 nlp.preprocess(load_existing=True, filter_loaded=filter_array)
-nlp.create_bag_of_words(filter_extremes=False, use_phrases='bigrams')
+nlp.create_bag_of_words(filter_extremes=False, use_phrases='bigram')
 for max_df in tqdm([0.3, 0.2, 0.1], desc="max df"):
     nlp.filter_extremes(min_df=nlp.min_df, max_df=max_df, keep_n=nlp.keep_n, keep_tokens=nlp.keep_tokens)
     nlp.create_bag_of_words_matrix()
