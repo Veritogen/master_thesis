@@ -5,7 +5,7 @@ import os
 import pickle
 from tqdm.auto import tqdm
 import logging
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 path = "b_collection_extracted/"
 stat_df = pd.read_pickle(f"{path}stat_df")
@@ -33,7 +33,8 @@ nlp.create_bag_of_words(filter_extremes=False, use_phrases='bigram')
 for max_df in tqdm([0.3, 0.2, 0.1], desc="max df"):
     nlp.filter_extremes(min_df=1, max_df=max_df, keep_n=nlp.keep_n, keep_tokens=nlp.keep_tokens)
     nlp.create_bag_of_words_matrix()
-    nlp.search_best_model(topic_list=[50, 100, 150, 200], passes=2, alphas=['asymmetric'], etas=[0.5, 0.7])
+    nlp.search_best_model(topic_list=[50, 100, 150, 200], passes=2, alphas=['asymmetric'], etas=[0.5, 0.7],
+                          coherence_scores=['c_v'])
 
     try:
         with open(f"{path}coherence_results", "wb") as f:
