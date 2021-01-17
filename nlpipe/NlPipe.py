@@ -266,7 +266,7 @@ class NlPipe:
         pass
 
     def create_lda_model(self, no_topics=10, random_state=42, passes=5, alpha='auto', eta='auto', workers=1,
-                         chunksize=20000):
+                         chunksize=2000):
         """
         :param no_topics: Number of topics that are to be explored by lda model
         :param random_state: Random state for reproducible results (default 42, gensim default is None)
