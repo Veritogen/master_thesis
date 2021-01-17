@@ -5,7 +5,8 @@ import os
 import pickle
 from tqdm.auto import tqdm
 import logging
-logging.basicConfig(filename= "pol_lda.log",format='%(asctime)s : %(levelname)s : %(message)s', level=logging.DEBUG)
+logging.basicConfig(filename="pol_lda.log", format='%(asctime)s : %(levelname)s : %(processName)s : %(message)s',
+                    level=logging.DEBUG)
 
 path = "pol_extracted/"
 stat_df = pd.read_pickle(f"{path}stat_df")
