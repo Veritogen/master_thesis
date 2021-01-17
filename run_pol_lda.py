@@ -5,10 +5,11 @@ import os
 import pickle
 from tqdm.auto import tqdm
 import logging
-logging.basicConfig(filename="pol_lda.log", format='%(asctime)s : %(levelname)s : %(processName)s : %(message)s',
+path = "pol_extracted/"
+
+logging.basicConfig(filename=f"{path}lda.log", format='%(asctime)s : %(levelname)s : %(processName)s : %(message)s',
                     level=logging.DEBUG)
 
-path = "pol_extracted/"
 stat_df = pd.read_pickle(f"{path}stat_df")
 if os.path.exists(f"{path}text_df"):
     print("text df found. loading.")
