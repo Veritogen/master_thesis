@@ -105,8 +105,8 @@ class NlPipe:
         """
         Method to preprocess the documents using spacy with the enabled pipeline components.
         """
-        if os.path.exists(f"{self.path}/text_df_preprocessed") and load_existing:
-            preprocessed_df = pd.read_pickle(f"{self.path}/text_df_preprocessed_spacy")
+        if os.path.exists(f"{self.path}text_df_preprocessed_spacy") and load_existing:
+            preprocessed_df = pd.read_pickle(f"{self.path}text_df_preprocessed_spacy")
             if filter_loaded is None:
                 self.spacy_docs = preprocessed_df['preprocessed_text'].to_list()
             else:
@@ -265,18 +265,26 @@ class NlPipe:
     def create_tfidf(self):
         pass
 
-    def create_lda_model(self, no_topics=10, random_state=42, passes=5, alpha='auto', eta='auto'):
+    def create_lda_model(self, no_topics=10, random_state=42, passes=5, alpha='auto', eta='auto', workers=1,
+                         chunksize=20000):
         """
         :param no_topics: Number of topics that are to be explored by lda model
         :param random_state: Random state for reproducible results (default 42, gensim default is None)
-        :param alpha: set alpha to "symmetric" or "asymmetric" (gensim default is "symmetric")
+        :param passes: Number of times the whole corpus is processed.
+        :param alpha: set topic-document distribution prior alpha to "symmetric" or "asymmetric"
+        (gensim default is "symmetric")
+        :param eta: Word-topic distribution prior eta (beta)
+        :param workers: number of workers to use. Defaulting to one as there seems to be a bug in gensim. 1 already
+        uses all available cores. Higher number of workers results in a load bigger than the number of cores.
+        :param chunksize: chunsize parameter of gensim
         """
         if self.bag_of_words is None:
             self.create_bag_of_words()
         self.lda_model = LdaMulticore(corpus=self.bag_of_words, id2word=self.id2word, num_topics=no_topics, eta=eta,
-                                      workers=self.processes, random_state=random_state, alpha=alpha, passes=passes)
+                                      workers=workers, random_state=random_state, alpha=alpha, passes=passes,
+                                      chunksize=chunksize)
 
-    def calculate_coherence(self, model=None, coherence_score='c_uci'):
+    def calculate_coherence(self, model=None, coherence_score='c_v'):
         """
         Method to calculate the coherence score of a given lda model. The model can either be provided or will be taken
         from the class.
