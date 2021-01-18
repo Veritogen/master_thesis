@@ -306,7 +306,7 @@ class NlPipe:
 
     def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas=[0.9, 0.5, 0.1],
                           etas=['auto', 0.9, 0.5, 0.1], save_best_model=True, save_models=False,
-                          return_best_model=False, passes = 1, coherence_scores=['c_v']):
+                          return_best_model=False, passes = 1, coherence_scores=['c_v'], chunksize=2000):
         #todo: save best model within class.
         """
         Method to search for the best lda model for a given number of topics. The best model will be determined by its
@@ -335,7 +335,7 @@ class NlPipe:
         for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
             for alpha in tqdm(alphas, desc='Alphas'):
                 for eta in tqdm(etas, desc='Etas'):
-                    self.create_lda_model(no_topics=no_topics, alpha=alpha, eta=eta, passes=passes)
+                    self.create_lda_model(no_topics=no_topics, alpha=alpha, eta=eta, passes=passes, chunksize=chunksize)
                     self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes_value}" \
                                         f"_min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}" \
                                         f"_k_n-{self.keep_n}_k_t-{self.keep_tokens}"] = {}
