@@ -38,8 +38,9 @@ nlp.create_bag_of_words(filter_extremes=False, use_phrases='bigram')
 for max_df in tqdm([0.3, 0.2, 0.1], desc="max df"):
     nlp.filter_extremes(min_df=1, max_df=max_df, keep_n=nlp.keep_n, keep_tokens=nlp.keep_tokens)
     nlp.create_bag_of_words_matrix()
-    nlp.search_best_model(topic_list=[50, 100, 150, 200], passes=2, alphas=['asymmetric'], etas=[0.5, 0.7],
-                          coherence_scores=['c_v'])
+    nlp.search_best_model(topic_list=[50, 100, 150, 200], passes=2,
+                          alphas=['asymmetric', 0.01, 0.1, 0.3, 0.5, 0.7], etas=['auto', 0.01, 0.1, 0.3],
+                          chunksize=20000)
 
     try:
         with open(f"{path}coherence_results", "wb") as f:
