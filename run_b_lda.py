@@ -1,3 +1,6 @@
+import os
+os.environ['NUMEXPR_MAX_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
 import pandas as pd
 from nlpipe import NlPipe
 import numpy as np
@@ -5,9 +8,11 @@ import os
 import pickle
 from tqdm.auto import tqdm
 import logging
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
 path = "b_collection_extracted/"
+logging.basicConfig(filename=f"{path}lda.log", format='%(asctime)s : %(levelname)s : %(processName)s : %(message)s',
+                    level=logging.DEBUG)
+
 stat_df = pd.read_pickle(f"{path}stat_df")
 if os.path.exists(f"{path}text_df"):
     print("text df found. loading.")
@@ -24,7 +29,7 @@ else:
     text_df.columns = ['thread_id', 'full_text']
     text_df.to_pickle(f"{path}text_df")
 
-nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=10)
+nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=24)
 #filter_array = np.logical_and(stat_df.thread_id.isin(text_df.sample(frac=0.1, weights=stat_df.replies).thread_id),
                              # stat_df.replies > 10)
 #filter_array = np.logical_and(filter_array, stat_df.language == 'en')
