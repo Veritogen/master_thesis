@@ -17,7 +17,6 @@ if os.path.exists(f"{path}text_df"):
     text_df = pd.read_pickle(f"{path}text_df")
     texts = text_df.full_text.to_list()
     thread_ids = text_df.thread_id.to_list()
-    text_df = None
 else:
     thread_ids = stat_df.thread_id.to_list()
     post_df = pd.read_pickle(f"{path}post_df_extracted")
