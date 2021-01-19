@@ -2,9 +2,10 @@ import pandas as pd
 from nlpipe import NlPipe
 import numpy as np
 import os
-import pickle
 from tqdm.auto import tqdm
 import logging
+from threadpoolctl import threadpool_limits
+
 path = "pol_extracted/"
 
 logging.basicConfig(filename=f"{path}lda.log", format='%(asctime)s : %(levelname)s : %(processName)s : %(message)s',
@@ -30,16 +31,11 @@ nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=36)
 filter_array = np.logical_and(stat_df.thread_id.isin(text_df.sample(frac=0.1, weights=stat_df.replies).thread_id),
                               stat_df.replies > 10)
 filter_array = np.logical_and(filter_array, stat_df.language == 'en')
-nlp.preprocess(load_existing=True, filter_loaded=filter_array)
+nlp.preprocess(load_existing=True)
 nlp.create_bag_of_words(filter_extremes=False, use_phrases='bigram')
-for max_df in tqdm([0.3, 0.2, 0.1], desc="max df"):
-    nlp.filter_extremes(min_df=25, max_df=max_df, keep_n=nlp.keep_n, keep_tokens=nlp.keep_tokens)
-    nlp.create_bag_of_words_matrix()
-    nlp.search_best_model(topic_list=[50, 100, 150, 200], passes=2,
-                          alphas=['asymmetric', 0.01, 0.1, 0.3, 0.5, 0.7], etas=['auto', 0.01, 0.1, 0.3])
-
-    try:
-        with open(f"{path}coherence_results", "wb") as f:
-            pickle.dump(nlp.coherence_dict, f)
-    except:
-        pass
+with threadpool_limits(limits=1, user_api='blas'):
+    for max_df in tqdm([0.3, 0.2, 0.1], desc="max df"):
+        nlp.filter_extremes(min_df=1, max_df=max_df, keep_n=nlp.keep_n, keep_tokens=nlp.keep_tokens)
+        nlp.create_bag_of_words_matrix()
+        nlp.search_best_model(topic_list=[50, 100, 150, 200], passes=2,
+                              alphas=['asymmetric', 0.01, 0.1, 0.3, 0.5, 0.7], etas=['auto', 0.01, 0.1, 0.3])
