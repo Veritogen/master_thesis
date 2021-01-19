@@ -16,6 +16,7 @@ from langdetect import detect
 import psutil
 import os
 from itertools import compress
+import pickle
 
 
 class NlPipe:
@@ -363,6 +364,8 @@ class NlPipe:
                             self.coherence_dict["best_eta"] = eta
                         if coherence_result > best_score:
                             best_score = coherence_result
+                    with open(f"{self.path}coherence_results", "wb") as f:
+                        pickle.dump(self.coherence_dict, f)
         if return_best_model:
             #returns number of topics and the lda_model
             return self.coherence_dict["best_topic_no"], self.coherence_dict["best_model"]
