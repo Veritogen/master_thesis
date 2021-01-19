@@ -17,6 +17,7 @@ import psutil
 import os
 from itertools import compress
 import pickle
+import time
 
 
 class NlPipe:
@@ -40,6 +41,7 @@ class NlPipe:
         :param language_detection: Detect language of docs.
         :param allowed_languages: Allowed language for the documents.
         """
+        self.path = path
         self.pipe_disable = []
         if not tagger:
             self.pipe_disable.append("tagger")
@@ -75,8 +77,12 @@ class NlPipe:
         self.allowed_languages = allowed_languages
         self.language_detection = language_detection
         self.id2word = None
-        self.coherence_dict = {}
-        self.path = path
+        if os.path.exists(f"{self.path}coherence_results"):
+            print("coherence results found")
+            with open(f"{self.path}coherence_results", "rb") as f:
+                self.coherence_dict = pickle.load(f)
+        else:
+            self.coherence_dict = {}
         self.max_df = None
         self.min_df = None
         self.use_phrases = None
@@ -266,7 +272,7 @@ class NlPipe:
     def create_tfidf(self):
         pass
 
-    def create_lda_model(self, no_topics=10, random_state=42, passes=5, alpha='auto', eta='auto', workers=1,
+    def create_lda_model(self, no_topics=10, random_state=42, passes=5, alpha='auto', eta='auto', workers=None,
                          chunksize=2000):
         """
         :param no_topics: Number of topics that are to be explored by lda model
@@ -279,13 +285,15 @@ class NlPipe:
         uses all available cores. Higher number of workers results in a load bigger than the number of cores.
         :param chunksize: chunsize parameter of gensim
         """
+        if workers is None:
+            workers = self.processes
         if self.bag_of_words is None:
             self.create_bag_of_words()
         self.lda_model = LdaMulticore(corpus=self.bag_of_words, id2word=self.id2word, num_topics=no_topics, eta=eta,
                                       workers=workers, random_state=random_state, alpha=alpha, passes=passes,
                                       chunksize=chunksize)
 
-    def calculate_coherence(self, model=None, coherence_score='c_v'):
+    def calculate_coherence(self, model=None, coherence_score='c_v', workers=None):
         """
         Method to calculate the coherence score of a given lda model. The model can either be provided or will be taken
         from the class.
@@ -293,21 +301,23 @@ class NlPipe:
         :param coherence_score: Coherence score to calculate
         :return: Return coherence model, which also contains the coherence score of a model.
         """
+        if workers is None:
+            workers = self.processes
         if model is None:
             model = self.lda_model
         else:
             model = model
         if coherence_score != 'u_mass':
             coherence_model = CoherenceModel(model=model, texts=self.preprocessed_docs, dictionary=self.id2word,
-                                             coherence=coherence_score, processes=self.processes)
+                                             coherence=coherence_score, processes=workers)
         else:
             coherence_model = CoherenceModel(model=model, corpus=self.bag_of_words, dictionary=self.id2word,
-                                             coherence=coherence_score, processes=self.processes)
+                                             coherence=coherence_score, processes=workers)
         return coherence_model
 
     def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas=[0.9, 0.5, 0.1],
                           etas=['auto', 0.9, 0.5, 0.1], save_best_model=True, save_models=False,
-                          return_best_model=False, passes = 1, coherence_scores=['c_v'], chunksize=2000):
+                          return_best_model=False, passes = 1, coherence_scores=['c_v'], chunksize=2000, workers=None):
         #todo: save best model within class.
         """
         Method to search for the best lda model for a given number of topics. The best model will be determined by its
@@ -322,8 +332,8 @@ class NlPipe:
         model.
         :return: Number of topics for the best result and the model with the best result of the coherence score
         """
-        hyperparameter_dict = {}
-
+        if workers is None:
+            workers = self.processes
         if return_best_model and not save_best_model:
             raise Exception("To return the best model, the parameter save_best_model has to be set to True.")
         if self.coherence_dict and save_best_model:
@@ -336,36 +346,34 @@ class NlPipe:
         for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
             for alpha in tqdm(alphas, desc='Alphas'):
                 for eta in tqdm(etas, desc='Etas'):
-                    self.create_lda_model(no_topics=no_topics, alpha=alpha, eta=eta, passes=passes, chunksize=chunksize)
-                    self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes_value}" \
-                                        f"_min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}" \
-                                        f"_k_n-{self.keep_n}_k_t-{self.keep_tokens}"] = {}
-                    if save_models:
-                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes_value}" \
-                                            f"_min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}" \
-                                            f"_k_n-{self.keep_n}_k_t-{self.keep_tokens}"]["lda_model"] = self.lda_model
-                    for coherence_score in coherence_scores:
-                        coherence_model = self.calculate_coherence(coherence_score=coherence_score)
-                        coherence_result = coherence_model.get_coherence()
+                    coherence_key = f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes_value}" \
+                                    f"_min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}" \
+                                    f"_k_n-{self.keep_n}_k_t-{self.keep_tokens}"
+                    if coherence_key in self.coherence_dict.keys():
+                        print("coherence value found, skipping")
+                        continue
+                    else:
+                        self.create_lda_model(no_topics=no_topics, alpha=alpha, eta=eta, passes=passes,
+                                              chunksize=chunksize, workers=workers)
+                        self.coherence_dict[coherence_key] = {}
                         if save_models:
-                            self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes_value}_" \
-                                                f"min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}_" \
-                                                f"k_n-{self.keep_n}_k_t-{self.keep_tokens}"]["coherence_model"] = \
-                                coherence_model
-                        self.coherence_dict[f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes_value}_" \
-                                            f"min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}_" \
-                                            f"k_n-{self.keep_n}_k_t-{self.keep_tokens}"][coherence_score] \
-                            = coherence_result
-                        if save_best_model and coherence_result > best_score:
-                            self.coherence_dict["best_score"] = coherence_result
-                            self.coherence_dict["best_model"] = self.lda_model
-                            self.coherence_dict["best_topic_no"] = no_topics
-                            self.coherence_dict["best_alpha"] = alpha
-                            self.coherence_dict["best_eta"] = eta
-                        if coherence_result > best_score:
-                            best_score = coherence_result
-                    with open(f"{self.path}coherence_results", "wb") as f:
-                        pickle.dump(self.coherence_dict, f)
+                            self.coherence_dict[coherence_key]["lda_model"] = self.lda_model
+                        for coherence_score in coherence_scores:
+                            coherence_model = self.calculate_coherence(coherence_score=coherence_score, workers=workers)
+                            coherence_result = coherence_model.get_coherence()
+                            if save_models:
+                                self.coherence_dict[coherence_key]["coherence_model"] = coherence_model
+                            self.coherence_dict[coherence_key][coherence_score] = coherence_result
+                            if save_best_model and coherence_result > best_score:
+                                self.coherence_dict["best_score"] = coherence_result
+                                self.coherence_dict["best_model"] = self.lda_model
+                                self.coherence_dict["best_topic_no"] = no_topics
+                                self.coherence_dict["best_alpha"] = alpha
+                                self.coherence_dict["best_eta"] = eta
+                            if coherence_result > best_score:
+                                best_score = coherence_result
+                        with open(f"{self.path}coherence_results", "wb") as f:
+                            pickle.dump(self.coherence_dict, f)
         if return_best_model:
             #returns number of topics and the lda_model
             return self.coherence_dict["best_topic_no"], self.coherence_dict["best_model"]
