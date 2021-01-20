@@ -39,4 +39,4 @@ with threadpool_limits(limits=1, user_api='blas'):
         nlp.create_bag_of_words_matrix()
         nlp.search_best_model(topic_list=[50, 100, 150, 200], passes=2,
                               alphas=['asymmetric', 0.01, 0.1, 0.3, 0.5, 0.7], etas=['auto', 0.01, 0.1, 0.3],
-                              chunksize=5000)
+                              chunksize=2000)
