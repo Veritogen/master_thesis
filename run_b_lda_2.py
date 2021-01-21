@@ -8,8 +8,8 @@ import logging
 from threadpoolctl import threadpool_limits
 
 path = "b_collection_extracted/"
-logging.basicConfig(filename=f"{path}lda.log", format='%(asctime)s : %(levelname)s : %(processName)s : %(message)s',
-                    level=logging.DEBUG)
+logging.basicConfig(filename=f"{path}lda_2.log", format='%(asctime)s : %(levelname)s : %(processName)s : %(message)s',
+                    level=logging.INFO)
 
 stat_df = pd.read_pickle(f"{path}stat_df")
 if os.path.exists(f"{path}text_df"):
@@ -37,6 +37,6 @@ with threadpool_limits(limits=1, user_api='blas'):
     for max_df in tqdm([0.5, 0.4, 0.3, 0.2, 0.1], desc="max df"):
         nlp.filter_extremes(min_df=25, max_df=max_df, keep_n=nlp.keep_n, keep_tokens=nlp.keep_tokens)
         nlp.create_bag_of_words_matrix()
-        nlp.search_best_model(topic_list=[150, 200], passes=2,
+        nlp.search_best_model(topic_list=[125, 150, 200], passes=2,
                               alphas=['asymmetric', 0.01, 0.1, 0.3], etas=['auto', 0.01, 0.1, 0.3, 0.5],
                               chunksize=2000, coherence_suffix=2)
