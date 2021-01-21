@@ -262,6 +262,7 @@ class NlPipe:
         self.save_dict(path=f"{self.path}/gensim_dict_{filter_extremes}_{min_df}_{max_df}_{use_phrases}")
 
     def filter_extremes(self, min_df, max_df, keep_n, keep_tokens=[]):
+        self.filter_extremes_value = True
         self.max_df = max_df
         self.min_df = min_df
         self.keep_n = keep_n
