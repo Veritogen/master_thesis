@@ -27,5 +27,5 @@ else:
     text_df.to_pickle(f"{path}text_df")
     text_df = None
 
-nlp = NlPipe.NlPipe(texts,path=path, document_ids=thread_ids, no_processes=10)
+nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=48)
 nlp.preprocess()
