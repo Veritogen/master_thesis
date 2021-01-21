@@ -31,6 +31,7 @@ nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=11)
 filter_array = np.logical_and(stat_df.thread_id.isin(text_df.sample(frac=0.3, weights=stat_df.replies).thread_id),
                               stat_df.replies > 10)
 filter_array = np.logical_and(filter_array, stat_df.language == 'en')
+print(f"{len(filter_array)} is limiting to {sum(filter_array)}")
 nlp.preprocess(load_existing=True, filter_loaded=filter_array)
 nlp.create_bag_of_words(filter_extremes=False, min_df=None, max_df=None)
 with threadpool_limits(limits=1, user_api='blas'):
