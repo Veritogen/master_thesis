@@ -318,7 +318,8 @@ class NlPipe:
 
     def search_best_model(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), alphas=[0.9, 0.5, 0.1],
                           etas=['auto', 0.9, 0.5, 0.1], save_best_model=True, save_models=False,
-                          return_best_model=False, passes = 1, coherence_scores=['c_v'], chunksize=2000, workers=None):
+                          return_best_model=False, passes = 1, coherence_scores=['c_v'], chunksize=2000, workers=None,
+                          coherence_suffix=None):
         #todo: save best model within class.
         """
         Method to search for the best lda model for a given number of topics. The best model will be determined by its
@@ -373,8 +374,12 @@ class NlPipe:
                                 self.coherence_dict["best_eta"] = eta
                             if coherence_result > best_score:
                                 best_score = coherence_result
-                        with open(f"{self.path}coherence_results", "wb") as f:
-                            pickle.dump(self.coherence_dict, f)
+                        if coherence_suffix is None:
+                            with open(f"{self.path}coherence_results", "wb") as f:
+                                pickle.dump(self.coherence_dict, f)
+                        else:
+                            with open(f"{self.path}coherence_results_{coherence_suffix}", "wb") as f:
+                                pickle.dump(self.coherence_dict, f)
         if return_best_model:
             #returns number of topics and the lda_model
             return self.coherence_dict["best_topic_no"], self.coherence_dict["best_model"]
