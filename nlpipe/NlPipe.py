@@ -150,7 +150,7 @@ class NlPipe:
                 self.preprocessed_docs = preprocessed_df['preprocessed_text'].loc[filter_loaded].to_list()
                 if isinstance(self.document_ids, np.ndarray):
                     self.document_ids = self.document_ids[filter_loaded]
-            print('Preprocessed data loaded.')
+                print(f'{len(filter_loaded)} preprocessed docs of {len(self.input_docs)} docs loaded.')
         else:
             self.preprocessed_docs = []
             if not self.spacy_docs:
