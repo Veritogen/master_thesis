@@ -29,3 +29,4 @@ else:
 
 nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=48)
 nlp.preprocess()
+nlp.create_dictionary(filter_extremes=False, min_df=None, max_df=None, use_phrases=None, keep_n=None, keep_tokens=None)
