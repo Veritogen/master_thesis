@@ -430,12 +430,21 @@ class NlPipe:
         within the class.
         :return:
         """
+        try:
+            is_jupyter = os.environ['_'].split("/")[-1] == "jupyter-notebook"
+            if is_jupyter:
+                pyLDAvis.enable_notebook()
+        except KeyError:
+            is_jupyter = False
         if model is None:
             if self.lda_model is None:
                 raise Exception("Please create a LDA model for evaluation before running this method.")
             model = self.lda_model
         panel = pyLDAvis.gensim.prepare(model, self.bag_of_words, self.id2word)
-        pyLDAvis.show(panel)
+        if is_jupyter:
+            pyLDAvis.display(panel)
+        else:
+            pyLDAvis.show(panel)
 
     def print_bow(self, doc_positions):
         print([[(self.id2word[token_id], freq) for token_id, freq in doc]
