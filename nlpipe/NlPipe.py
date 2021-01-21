@@ -347,9 +347,9 @@ class NlPipe:
         for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
             for alpha in tqdm(alphas, desc='Alphas'):
                 for eta in tqdm(etas, desc='Etas'):
-                    coherence_key = f"no_{no_topics}-a_{alpha}-e_{eta}_filter-{self.filter_extremes_value}" \
-                                    f"_min_df-{self.min_df}_max_df-{self.max_df}_phrases-{self.use_phrases}" \
-                                    f"_k_n-{self.keep_n}_k_t-{self.keep_tokens}"
+                    coherence_key = f"no={no_topics}-a={alpha}-e={eta}-filter={self.filter_extremes_value}" \
+                                    f"-min_df={self.min_df}-max_df={self.max_df}-phrases={self.use_phrases}" \
+                                    f"-k_n={self.keep_n}-k_t={self.keep_tokens}"
                     if coherence_key in self.coherence_dict.keys():
                         print("coherence value found, skipping")
                         continue
