@@ -4,6 +4,7 @@ from graph_pipeline.main import *
 import os
 from langdetect import detect
 import logging
+import multiprocessing as mp
 
 
 def extract_graphs():
@@ -33,6 +34,9 @@ e.extract(save_com=False, save_full_text=True, batch_size=10000000)
 
 # create dict with text of all threads for detection of languages
 text_dict = {thread_id: "" for thread_id in e.stat_df.thread_id}
+for iter_tup in tqdm(e.post_df.itertuples(), desc="merging posts to a doc for each thread"):
+    if isinstance(iter_tup.full_string, str):
+        text_dict[iter_tup.thread_id] = text_dict[iter_tup.thread_id] + iter_tup.full_string
 no_processes = 40
 pool = mp.Pool(processes=no_processes)
 results = [pool.apply_async(lang_detect_wrapper, (item[0], item[1],))
