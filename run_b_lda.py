@@ -36,8 +36,10 @@ nlp.preprocess(load_existing=True, filter_loaded=filter_array)
 nlp.create_bag_of_words(filter_extremes=False, min_df=None, max_df=None)
 with threadpool_limits(limits=1, user_api='blas'):
     for max_df in tqdm([0.5, 0.4, 0.3, 0.2, 0.1], desc="max df"):
-        nlp.filter_extremes(min_df=25, max_df=max_df, keep_n=nlp.keep_n, keep_tokens=nlp.keep_tokens)
-        nlp.create_bag_of_words_matrix()
-        nlp.search_best_model(topic_list=[25, 50, 75, 100], passes=2,
-                              alphas=['asymmetric', 0.01, 0.1, 0.3], etas=['auto', 0.01, 0.1, 0.3, 0.5],
-                              chunksize=2000, coherence_suffix=1)
+        for min_df in tqdm([10, 25]):
+            nlp.filter_extremes(min_df=min_df, max_df=max_df, keep_n=nlp.keep_n, keep_tokens=nlp.keep_tokens)
+            nlp.filter_extremes(min_df=25, max_df=max_df, keep_n=nlp.keep_n, keep_tokens=nlp.keep_tokens)
+            nlp.create_bag_of_words_matrix()
+            nlp.search_best_model(topic_list=[25, 50, 75, 100], passes=2,
+                                  alphas=['asymmetric', 0.01, 0.1, 0.3], etas=['auto', 0.01, 0.1, 0.3, 0.5],
+                                  chunksize=1000, coherence_suffix=1)
