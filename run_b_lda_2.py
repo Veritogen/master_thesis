@@ -28,7 +28,7 @@ else:
     text_df.to_pickle(f"{path}text_df")
 
 nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=11)
-filter_array = np.logical_and(stat_df.thread_id.isin(text_df.sample(frac=0.3, weights=stat_df.replies).thread_id),
+filter_array = np.logical_and(stat_df.thread_id.isin(text_df.sample(frac=0.5, weights=stat_df.replies).thread_id),
                               stat_df.replies > 10)
 filter_array = np.logical_and(filter_array, stat_df.language == 'en')
 nlp.preprocess(load_existing=True, filter_loaded=filter_array)
