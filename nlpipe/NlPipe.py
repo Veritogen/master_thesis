@@ -429,28 +429,35 @@ class NlPipe:
             topic_keywords.append(keywords.take(top_keyword_locations))
         self.word_topic_df = pd.DataFrame(topic_keywords, columns=[f"word_{x}" for x in range(no_words)])
 
-    def evaluate_pyldavis(self, model=None):
+    def evaluate_pyldavis(self, model=None, use_jupyter=None):
         """
         Method for a visual evaluation of the LDA topic model using pyldavis.
         :param model: LDA model that is to be evaluated. If 'None', it will use the last model that has been saved
         within the class.
         :return:
         """
-        try:
-            is_jupyter = os.environ['_'].split("/")[-1] == "jupyter-notebook"
-            if is_jupyter:
-                pyLDAvis.enable_notebook()
-        except KeyError:
-            is_jupyter = False
         if model is None:
             if self.lda_model is None:
                 raise Exception("Please create a LDA model for evaluation before running this method.")
             model = self.lda_model
         panel = pyLDAvis.gensim.prepare(model, self.bag_of_words, self.id2word)
-        if is_jupyter:
+        if use_jupyter is None:
+            try:
+                is_jupyter = os.environ['_'].split("/")[-1] == "jupyter-notebook"
+                if is_jupyter:
+                    pyLDAvis.enable_notebook()
+            except KeyError:
+                is_jupyter = False
+            if is_jupyter:
+                pyLDAvis.display(panel)
+            else:
+                pyLDAvis.show(panel)
+        if use_jupyter:
+            pyLDAvis.enable_notebook()
             pyLDAvis.display(panel)
-        else:
+        elif not use_jupyter:
             pyLDAvis.show(panel)
+
 
     def print_bow(self, doc_positions):
         print([[(self.id2word[token_id], freq) for token_id, freq in doc]
