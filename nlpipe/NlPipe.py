@@ -434,6 +434,8 @@ class NlPipe:
         Method for a visual evaluation of the LDA topic model using pyldavis.
         :param model: LDA model that is to be evaluated. If 'None', it will use the last model that has been saved
         within the class.
+        :param use_jupyter: set how the pyldavis panel is displayed. If default (None), it will try to find out if run
+        from jupyter and set the method accordingly
         :return:
         """
         if model is None:
@@ -452,11 +454,12 @@ class NlPipe:
                 pyLDAvis.display(panel)
             else:
                 pyLDAvis.show(panel)
-        if use_jupyter:
-            pyLDAvis.enable_notebook()
-            pyLDAvis.display(panel)
-        elif not use_jupyter:
-            pyLDAvis.show(panel)
+        else:
+            if use_jupyter:
+                pyLDAvis.enable_notebook()
+                pyLDAvis.display(panel)
+            elif not use_jupyter:
+                pyLDAvis.show(panel)
 
 
     def print_bow(self, doc_positions):
