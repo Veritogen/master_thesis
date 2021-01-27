@@ -3,7 +3,6 @@ from graph_pipeline import GraphFeatures as gf
 import multiprocessing as mp
 import networkx as nx
 from tqdm.auto import tqdm
-import traceback
 
 """
 Script to execute the extraction of graph measures for either a single graph or multiple/all graphs using 
@@ -23,7 +22,6 @@ def return_one(path):
     try:
         graph_features = gf.GraphFeatures(graph).return_features()
     except:
-        #print(path, traceback.format_exc())
         graph_features = None
     thread_id = int(path.split("/")[-1].strip(".gexf"))
     return thread_id, graph_features
