@@ -1,4 +1,5 @@
 import networkx as nx
+from scipy.special import binom
 
 
 class GraphFeatures:
@@ -24,11 +25,13 @@ class GraphFeatures:
             'average_degree': self.average_degree(),
             'density': self.density(),
             'longest_path': self.longest_path(),
+            'transitivity': self.transitivity(),
+            'average_clustering': self.average_clustering(),
+            'network_diameter': self.network_diameter(),
+            'network_radius': self.network_radius(),
             'degree_centralization': self.degree_centralization(),
             'betweenness_centralization': self.betweenness_centralization(),
-            # excluded because not between 0 and 1
-            #'closeness_centralization': self.closeness_centralization()
-
+            'closeness_centralization': self.closeness_centralization(),
         }
         triads = self.no_triads_per_type()
         for triad, count in triads.items():
@@ -65,16 +68,40 @@ class GraphFeatures:
         :return: Returns the triad count for each selected triad within the given graph, normalized by dividing by the
         number of nodes within the graph.
         """
-        possible_triads = {'021U', '012', '021D', '003', '030T', '021C'}
         triad_dict = nx.triadic_census(self.graph)
-        return {triad_type: triad_dict[triad_type]/self.no_nodes for triad_type in triad_dict.keys()
-                if triad_type in possible_triads}
+        return {triad_type: triad_dict[triad_type]/binom(self.no_nodes, 3) for triad_type in triad_dict.keys()}
 
     def transitivity(self):
         """
-        :return: Retunrs the transitivity of the given graph.
+        :return: Returns the transitivity of the given graph.
         """
         return nx.transitivity(self.graph)
+
+    def network_diameter(self):
+        """
+        :return: Returns the network diameter of the given graph.
+        """
+        try:
+            diameter = nx.diameter(self.graph)
+            return diameter
+        except nx.exception.NetworkXError:
+            return None
+
+    def network_radius(self):
+        """
+        :return: Returns the network radius of the given graph.
+        """
+        try:
+            radius = nx.radius(self.graph)
+            return radius
+        except nx.exception.NetworkXError:
+            return None
+
+    def average_clustering(self):
+        """
+        :return: Returns average clustering of a graph.
+        """
+        return nx.average_clustering(self.graph)
 
     def degree_centralization(self):
         """
@@ -86,28 +113,40 @@ class GraphFeatures:
         degree_sum = 0
         for node_id in graph_degree_dict.keys():
             degree_sum += (max_degree - graph_degree_dict[node_id])
-        return degree_sum / (self.no_nodes ** 2 - 3 * self.no_nodes + 2)
+        try:
+            return degree_sum / (self.no_nodes ** 2 - 3 * self.no_nodes + 2)
+        except ZeroDivisionError:
+            return None
 
     def betweenness_centralization(self):
         """
         :return: Returns the betweenness centralization of the given graph, according to Freeman 1978 - Centrality in
         social networks.
         """
-        betweenness_dict = nx.betweenness_centrality(self.graph)
+        betweenness_dict = nx.betweenness_centrality(self.graph, normalized=True)
         max_betweenness = max(betweenness_dict.values())
         betweenness_sum = 0
         for node_id in betweenness_dict.keys():
             betweenness_sum += (max_betweenness - betweenness_dict[node_id])
-        return betweenness_sum / (self.no_nodes - 1)
+        try:
+            return betweenness_sum / (self.no_nodes - 1)
+        except ZeroDivisionError:
+            return None
 
     def closeness_centralization(self):
         """
         :return: Returns the closeness centralization of the given graph, according to Freeman 1978 - Centrality in
         social networks.
         """
-        closeness_dict = nx.closeness_centrality(self.graph)
-        max_closeness = max(closeness_dict.values())
-        closeness_sum = 0
-        for node_id in closeness_dict:
-            closeness_sum += (max_closeness - closeness_dict[node_id])
-        return closeness_sum/((self.no_nodes ** 2 - 3 * self.no_nodes + 2) / (2 * self.no_nodes - 3))
+        if not nx.is_connected(nx.to_undirected(self.graph)):
+            return None
+        else:
+            closeness_dict = nx.closeness_centrality(self.graph, wf_improved=True)
+            max_closeness = max(closeness_dict.values())
+            closeness_sum = 0
+            for node_id in closeness_dict:
+                closeness_sum += (max_closeness - closeness_dict[node_id])
+            try:
+                return closeness_sum / ((self.no_nodes ** 2 - 3 * self.no_nodes + 2) / (2 * self.no_nodes - 3))
+            except ZeroDivisionError:
+                return None
