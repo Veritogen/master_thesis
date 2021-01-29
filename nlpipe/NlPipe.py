@@ -5,6 +5,7 @@ import gensim.corpora as corpora
 from gensim.models.phrases import Phrases, Phraser
 from gensim.models.ldamulticore import LdaMulticore
 from gensim.models import CoherenceModel, TfidfModel
+from gensim.models.wrappers import LdaMallet
 import pyLDAvis
 import pyLDAvis.gensim
 import pandas as pd
@@ -77,12 +78,7 @@ class NlPipe:
         self.allowed_languages = allowed_languages
         self.language_detection = language_detection
         self.id2word = None
-        if os.path.exists(f"{self.path}coherence_results"):
-            print("coherence results found")
-            with open(f"{self.path}coherence_results", "rb") as f:
-                self.coherence_dict = pickle.load(f)
-        else:
-            self.coherence_dict = {}
+        self.coherence_dict = None
         self.max_df = None
         self.min_df = None
         self.use_phrases = None
@@ -227,7 +223,7 @@ class NlPipe:
                 self.create_trigrams(trigram_threshold=trigram_threshold)
             self.create_dictionary(filter_extremes=filter_extremes, min_df=min_df, max_df=max_df, keep_n=keep_n,
                                    keep_tokens=keep_tokens, use_phrases=use_phrases)
-            self.create_bag_of_words_matrix()
+        self.create_bag_of_words_matrix()
 
     def create_bigrams(self, bigram_min_count, bigram_threshold):
         self.bigram_phrases = Phrases(self.preprocessed_docs, min_count=bigram_min_count,
@@ -273,7 +269,7 @@ class NlPipe:
     def create_tfidf(self):
         pass
 
-    def create_lda_model(self, no_topics=10, random_state=42, passes=5, alpha='auto', eta='auto', workers=None,
+    def create_lda_model(self, no_topics=10, random_state=42, passes=5, alpha='auto', eta=None, workers=None,
                          chunksize=2000):
         """
         :param no_topics: Number of topics that are to be explored by lda model
@@ -286,6 +282,8 @@ class NlPipe:
         uses all available cores. Higher number of workers results in a load bigger than the number of cores.
         :param chunksize: chunsize parameter of gensim
         """
+        if eta is None:
+            eta = 1/no_topics
         if workers is None:
             workers = self.processes
         if self.bag_of_words is None:
@@ -294,12 +292,31 @@ class NlPipe:
                                       workers=workers, random_state=random_state, alpha=alpha, passes=passes,
                                       chunksize=chunksize)
 
+    def create_mallet_lda_model(self, no_topics, random_state=42, workers=None, mallet_path="mallet-2.0.8/bin/mallet",
+                                iterations=1000):
+        """
+        Method to create a mallet lda model using gensim wrapper for lda mallet
+        :param no_topics: Number of topics for lda model
+        :param random_state: Random state to be able to reprocude model creation
+        :param workers: Number of workers to use
+        :param mallet_path: path to mallet binary, e.g. "mallet-2.0.8/bin/mallet"
+        :param iterations: iterations over the corpus?!
+        """
+        if workers is None:
+            workers = self.processes
+        if self.bag_of_words is None:
+            self.create_bag_of_words()
+        self.lda_model = LdaMallet(num_topics=no_topics, mallet_path=mallet_path, corpus=self.bag_of_words,
+                                   id2word=self.id2word, random_seed=random_state, iterations=iterations,
+                                   workers=workers, prefix="mallet_temp_")
+
     def calculate_coherence(self, model=None, coherence_score='c_v', workers=None):
         """
         Method to calculate the coherence score of a given lda model. The model can either be provided or will be taken
         from the class.
         :param model: Model to use instead of the model saved within the class.
         :param coherence_score: Coherence score to calculate
+        :param workers: Number of workers to use for coherence evaluation.
         :return: Return coherence model, which also contains the coherence score of a model.
         """
         if workers is None:
@@ -334,6 +351,16 @@ class NlPipe:
         model.
         :return: Number of topics for the best result and the model with the best result of the coherence score
         """
+        if coherence_suffix is None:
+            path = f"{self.path}coherence_results"
+        else:
+            path = f"{self.path}coherence_results_{coherence_suffix}"
+        if os.path.exists(path):
+            print("coherence results found")
+            with open(path, "rb") as f:
+                self.coherence_dict = pickle.load(f)
+        else:
+            self.coherence_dict = {}
         if workers is None:
             workers = self.processes
         if return_best_model and not save_best_model:
@@ -374,12 +401,79 @@ class NlPipe:
                                 self.coherence_dict["best_eta"] = eta
                             if coherence_result > best_score:
                                 best_score = coherence_result
-                        if coherence_suffix is None:
-                            with open(f"{self.path}coherence_results", "wb") as f:
-                                pickle.dump(self.coherence_dict, f)
-                        else:
-                            with open(f"{self.path}coherence_results_{coherence_suffix}", "wb") as f:
-                                pickle.dump(self.coherence_dict, f)
+                        with open(path, "wb") as f:
+                            pickle.dump(self.coherence_dict, f)
+        if return_best_model:
+            #returns number of topics and the lda_model
+            return self.coherence_dict["best_topic_no"], self.coherence_dict["best_model"]
+
+    def search_best_model_mallet(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), save_best_model=True,
+                                 save_models=False, return_best_model=False, coherence_scores=['c_v'], workers=None,
+                                 coherence_suffix=None, random_state=42, mallet_path="mallet-2.0.8/bin/mallet",
+                                 iterations=1000):
+        """
+
+        :param topic_list:
+        :param save_best_model:
+        :param save_models:
+        :param return_best_model:
+        :param coherence_scores:
+        :param workers:
+        :param coherence_suffix:
+        :param random_state:
+        :param mallet_path:
+        :param iterations:
+        :return:
+        """
+        if coherence_suffix is None:
+            path = f"{self.path}coherence_results_mallet"
+        else:
+            path = f"{self.path}coherence_results_mallet_{coherence_suffix}"
+        if os.path.exists(path):
+            print("coherence results found")
+            with open(path, "rb") as f:
+                self.coherence_dict = pickle.load(f)
+        else:
+            self.coherence_dict = {}
+        if workers is None:
+            workers = self.processes
+        if return_best_model and not save_best_model:
+            raise Exception("To return the best model, the parameter save_best_model has to be set to True.")
+        if self.coherence_dict and save_best_model:
+            try:
+                best_score = self.coherence_dict['best_score']
+            except:
+                best_score = 0
+        else:
+            best_score = 0
+        for no_topics in tqdm(topic_list, desc="Calculating topic coherences: "):
+            coherence_key = f"mallet-no={no_topics}-filter={self.filter_extremes_value}" \
+                            f"-min_df={self.min_df}-max_df={self.max_df}-phrases={self.use_phrases}" \
+                            f"-k_n={self.keep_n}-k_t={self.keep_tokens}"
+            if coherence_key in self.coherence_dict.keys():
+                print("coherence value found, skipping")
+                continue
+            else:
+                self.create_mallet_lda_model(no_topics=no_topics, workers=workers, random_state=random_state,
+                                             mallet_path=mallet_path, iterations=iterations)
+                self.coherence_dict[coherence_key] = {}
+                if save_models:
+                    self.coherence_dict[coherence_key]["lda_model"] = self.lda_model
+                for coherence_score in coherence_scores:
+                    coherence_model = self.calculate_coherence(coherence_score=coherence_score, workers=workers)
+                    coherence_result = coherence_model.get_coherence()
+                    if save_models:
+                        self.coherence_dict[coherence_key]["coherence_model"] = coherence_model
+                    self.coherence_dict[coherence_key][coherence_score] = coherence_result
+                    if save_best_model and coherence_result > best_score:
+                        self.coherence_dict["best_score"] = coherence_result
+                        self.coherence_dict["best_model"] = self.lda_model
+                        self.coherence_dict["best_topic_no"] = no_topics
+                        self.coherence_dict["best_alpha"] = self.lda_model.alpha
+                    if coherence_result > best_score:
+                        best_score = coherence_result
+                with open(path, "wb") as f:
+                    pickle.dump(self.coherence_dict, f)
         if return_best_model:
             #returns number of topics and the lda_model
             return self.coherence_dict["best_topic_no"], self.coherence_dict["best_model"]
