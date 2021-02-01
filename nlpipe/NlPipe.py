@@ -177,7 +177,7 @@ class NlPipe:
 
     def create_bag_of_words(self, filter_extremes=True, min_df=5, max_df=0.5, keep_n=100000, keep_tokens=None,
                             use_phrases=None, bigram_min_count=1000, bigram_threshold=100, trigram_threshold=100,
-                            load_existing=True):
+                            load_existing=True, tfidf=False):
         """
         :param filter_extremes: En-/Disable filtering of tokens that occur too frequent/not frequent enough
         (https://radimrehurek.com/gensim/corpora/dictionary.html)
@@ -223,7 +223,7 @@ class NlPipe:
                 self.create_trigrams(trigram_threshold=trigram_threshold)
             self.create_dictionary(filter_extremes=filter_extremes, min_df=min_df, max_df=max_df, keep_n=keep_n,
                                    keep_tokens=keep_tokens, use_phrases=use_phrases)
-        self.create_bag_of_words_matrix()
+        self.create_bag_of_words_matrix(tfidf=tfidf)
 
     def create_bigrams(self, bigram_min_count, bigram_threshold):
         self.bigram_phrases = Phrases(self.preprocessed_docs, min_count=bigram_min_count,
@@ -238,9 +238,11 @@ class NlPipe:
         self.preprocessed_docs = [trigram_phraser[self.bigram_phraser[doc]]
                                   for doc in tqdm(self.preprocessed_docs, desc="Extracting trigrams")]
 
-    def create_bag_of_words_matrix(self):
+    def create_bag_of_words_matrix(self, tfidf=False):
         self.bag_of_words = [self.id2word.doc2bow(doc)
                              for doc in tqdm(self.preprocessed_docs, desc='Creating bag of words')]
+        if tfidf:
+            self.create_tfidf()
 
     def create_dictionary(self, filter_extremes, min_df, max_df, keep_n, keep_tokens, use_phrases):
         print('Creating dictionary.')
@@ -267,7 +269,8 @@ class NlPipe:
                                      keep_tokens=keep_tokens)
 
     def create_tfidf(self):
-        pass
+        tfidf_model = TfidfModel(self.bag_of_words)
+        self.bag_of_words = [tfidf_model[vector] for vector in tqdm(self.bag_of_words, desc="Creating tf-idf matrix")]
 
     def create_lda_model(self, no_topics=10, random_state=42, passes=5, alpha='auto', eta=None, workers=None,
                          chunksize=2000):
