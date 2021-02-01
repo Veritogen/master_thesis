@@ -42,7 +42,7 @@ class GraphFeatures:
         """
         :return: Returns the maximum degree of the given graph.
         """
-        return self.max_degree/self.no_nodes
+        return self.max_degree/(self.no_nodes-1)
 
     def average_degree(self):
         """
