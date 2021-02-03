@@ -6,6 +6,7 @@ from gensim.models.phrases import Phrases, Phraser
 from gensim.models.ldamulticore import LdaMulticore
 from gensim.models import CoherenceModel, TfidfModel
 from gensim.models.wrappers import LdaMallet
+from gensim.models.wrappers.ldamallet import malletmodel2ldamodel
 import pyLDAvis
 import pyLDAvis.gensim
 import pandas as pd
@@ -146,7 +147,7 @@ class NlPipe:
                 self.preprocessed_docs = preprocessed_df['preprocessed_text'].loc[filter_loaded].to_list()
                 if isinstance(self.document_ids, np.ndarray):
                     self.document_ids = self.document_ids[filter_loaded]
-                print(f'{len(filter_loaded)} preprocessed docs of {len(self.input_docs)} docs loaded.')
+                print(f'{sum(filter_loaded)} preprocessed docs of {len(self.input_docs)} docs loaded.')
         else:
             self.preprocessed_docs = []
             if not self.spacy_docs:
@@ -539,6 +540,8 @@ class NlPipe:
             if self.lda_model is None:
                 raise Exception("Please create a LDA model for evaluation before running this method.")
             model = self.lda_model
+        if isinstance(model, LdaMallet):
+            model = malletmodel2ldamodel(model)
         panel = pyLDAvis.gensim.prepare(model, self.bag_of_words, self.id2word)
         if use_jupyter is None:
             try:
