@@ -33,10 +33,5 @@ filter_array = np.logical_and(stat_df.language == 'en',
 
 print(f"{len(filter_array)} is limiting to {sum(filter_array)}")
 nlp.preprocess(load_existing=True, filter_loaded=filter_array)
-nlp.create_bag_of_words(filter_extremes=False, min_df=None, max_df=None)
-with threadpool_limits(limits=1, user_api='blas'):
-    for max_df in tqdm([0.3], desc="max df"):
-        for min_df in tqdm([25]):
-            nlp.filter_extremes(min_df=min_df, max_df=max_df, keep_n=nlp.keep_n, keep_tokens=nlp.keep_tokens)
-            nlp.create_bag_of_words_matrix()
-            nlp.search_best_model_mallet(topic_list=[25, 50, 75, 100])
+nlp.create_bag_of_words(filter_extremes=True, min_df=(0.001*sum(filter_array)), max_df=0.5)
+nlp.search_best_model_mallet(topic_list=[range(5, 50, 5)])
