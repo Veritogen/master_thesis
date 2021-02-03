@@ -34,4 +34,4 @@ filter_array = np.logical_and(stat_df.language == 'en',
 print(f"{len(filter_array)} is limiting to {sum(filter_array)}")
 nlp.preprocess(load_existing=True, filter_loaded=filter_array)
 nlp.create_bag_of_words(filter_extremes=True, min_df=(0.001*sum(filter_array)), max_df=0.5)
-nlp.search_best_model_mallet(topic_list=[range(5, 50, 5)])
+nlp.search_best_model_mallet(topic_list=list(range(5, 50, 5)))
