@@ -312,7 +312,7 @@ class NlPipe:
             self.create_bag_of_words()
         self.lda_model = LdaMallet(num_topics=no_topics, mallet_path=mallet_path, corpus=self.bag_of_words,
                                    id2word=self.id2word, random_seed=random_state, iterations=iterations,
-                                   workers=workers, prefix="mallet_temp_")
+                                   workers=workers, prefix=f"{self.path}mallet_temp_")
 
     def calculate_coherence(self, model=None, coherence_score='c_v', workers=None):
         """
