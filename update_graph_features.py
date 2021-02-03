@@ -1,10 +1,10 @@
 from graph_pipeline.main import *
 import pandas as pd
-
+from tqdm.auto import tqdm
 
 def extract_graphs(no_processes=25):
     path_list = []
-    for index, row in stat_df.iterrows():
+    for index, row in tqdm(stat_df.iterrows()):
         path_list.append(f"{out_path}/gexfs/{row.board}/{row.thread_id}.gexf")
     graph_parameters = return_from_list(path_list, no_processes=no_processes)
     graph_features_all = pd.DataFrame(graph_parameters).transpose()
@@ -19,5 +19,6 @@ def extract_graphs(no_processes=25):
 
 for out_path in ["pol_extracted", "b_collection_extracted", "archive_collection_extracted"]:
     stat_df = pd.read_pickle(f"{out_path}/stat_df")
+    print(f"stat_df ({out_path}) loaded")
     extract_graphs(no_processes=20)
 
