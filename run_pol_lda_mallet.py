@@ -27,12 +27,12 @@ else:
     text_df.columns = ['thread_id', 'full_text']
     text_df.to_pickle(f"{path}text_df")
 
-nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=25)
+nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=10)
 filter_array = np.logical_and(stat_df.language == 'en',
                               stat_df.replies >= 10)
 filter_array = np.logical_and(filter_array, stat_df.replies <= 350)
 
 print(f"{len(filter_array)} is limiting to {sum(filter_array)}")
 nlp.preprocess(load_existing=True, filter_loaded=filter_array)
-nlp.create_bag_of_words(filter_extremes=True, min_df=(int(0.001*sum(filter_array))), max_df=0.3)
+nlp.create_bag_of_words(filter_extremes=True, min_df=(int(0.001*sum(filter_array))), max_df=0.3, ccoherence_workers = 20)
 nlp.search_best_model_mallet(topic_list=list(range(5, 100, 5)))
