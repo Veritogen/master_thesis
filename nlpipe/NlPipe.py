@@ -413,8 +413,8 @@ class NlPipe:
 
     def search_best_model_mallet(self, topic_list=frozenset({2, 3, 4, 5, 10, 15, 20, 25}), save_best_model=True,
                                  save_models=False, return_best_model=False, coherence_scores=['c_v'], workers=None,
-                                 coherence_suffix=None, random_state=42, mallet_path="mallet-2.0.8/bin/mallet",
-                                 iterations=1000):
+                                 coherence_workers=None, coherence_suffix=None, random_state=42, 
+                                 mallet_path="mallet-2.0.8/bin/mallet", iterations=1000):
         """
 
         :param topic_list:
@@ -441,6 +441,8 @@ class NlPipe:
             self.coherence_dict = {}
         if workers is None:
             workers = self.processes
+        if coherence_workers is None:
+            coherence_workers = self.processes        
         if return_best_model and not save_best_model:
             raise Exception("To return the best model, the parameter save_best_model has to be set to True.")
         if self.coherence_dict and save_best_model:
@@ -464,7 +466,7 @@ class NlPipe:
                 if save_models:
                     self.coherence_dict[coherence_key]["lda_model"] = self.lda_model
                 for coherence_score in coherence_scores:
-                    coherence_model = self.calculate_coherence(coherence_score=coherence_score, workers=workers)
+                    coherence_model = self.calculate_coherence(coherence_score=coherence_score, workers=coherence_workers)
                     coherence_result = coherence_model.get_coherence()
                     if save_models:
                         self.coherence_dict[coherence_key]["coherence_model"] = coherence_model
