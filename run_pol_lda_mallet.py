@@ -29,7 +29,8 @@ else:
 
 nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=25)
 filter_array = np.logical_and(stat_df.language == 'en',
-                              stat_df.replies > 10)
+                              stat_df.replies >= 10)
+filter_array = np.logical_and(filter_array, stat_df.replies <= 350)
 
 print(f"{len(filter_array)} is limiting to {sum(filter_array)}")
 nlp.preprocess(load_existing=True, filter_loaded=filter_array)
