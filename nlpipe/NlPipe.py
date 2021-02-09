@@ -492,16 +492,16 @@ class NlPipe:
         :param no_topics: Number of topics in case no LDA model is provided.
         """
         if model is None:
-            self.create_lda_model(no_topics=no_topics)
-        else:
-            self.lda_model = model
+            model = self.lda_model
+        if isinstance(model, LdaMallet):
+            model = malletmodel2ldamodel(model)
         topic_result_list = []
-        for doc in self.lda_model.get_document_topics(bow=self.bag_of_words):
+        for doc in model.get_document_topics(bow=self.bag_of_words):
             temp_dict = {}
             for topic, probability in doc:
                 temp_dict[topic] = probability
             topic_result_list.append(temp_dict)
-        self.result_df = pd.DataFrame(data=topic_result_list, columns=range(no_topics))
+        self.result_df = pd.DataFrame(data=topic_result_list, columns=range(model.num_topics))
         self.result_df = self.result_df.fillna(0)
         if self.document_ids is not None and not self.language_detection:
             self.result_df.index = self.document_ids
@@ -517,7 +517,10 @@ class NlPipe:
                             "method")
         counter = Counter(self.result_df.dominant_topic)
         topic_dict = OrderedDict(sorted(counter.items(), key=lambda x: x[1], reverse=True))
-        sns.barplot(x=list(topic_dict.values()), y=list(topic_dict.keys()), order=list(topic_dict.keys()), orient='h')
+        plt.figure(figsize=(10,6))
+        g = sns.barplot(x=list(topic_dict.values()), y=list(topic_dict.keys()), order=list(topic_dict.keys()), orient='h')
+        g.set_ylabel("topic number")
+        g.set_xlabel("count")
         plt.show()
 
     def evaluate_model(self, no_words=30):
