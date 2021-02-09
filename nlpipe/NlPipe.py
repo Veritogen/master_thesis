@@ -297,7 +297,7 @@ class NlPipe:
                                       chunksize=chunksize)
 
     def create_mallet_lda_model(self, no_topics, random_state=42, workers=None, mallet_path="mallet-2.0.8/bin/mallet",
-                                iterations=1000):
+                                iterations=1000, custom_prefix=None):
         """
         Method to create a mallet lda model using gensim wrapper for lda mallet
         :param no_topics: Number of topics for lda model
@@ -310,9 +310,13 @@ class NlPipe:
             workers = self.processes
         if self.bag_of_words is None:
             self.create_bag_of_words()
+        if custom_prefix is None:
+            prefix = f"{self.path}mallet_temp_"
+        else:
+            prefix = f"{self.path}mallet_temp_{custom_prefix}_"
         self.lda_model = LdaMallet(num_topics=no_topics, mallet_path=mallet_path, corpus=self.bag_of_words,
                                    id2word=self.id2word, random_seed=random_state, iterations=iterations,
-                                   workers=workers, prefix=f"{self.path}mallet_temp_")
+                                   workers=workers, prefix=prefix)
 
     def calculate_coherence(self, model=None, coherence_score='c_v', workers=None):
         """
