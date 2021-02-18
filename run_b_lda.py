@@ -27,7 +27,7 @@ else:
     text_df.columns = ['thread_id', 'full_text']
     text_df.to_pickle(f"{path}text_df")
 
-nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=20)
+nlp = NlPipe.NlPipe(texts, path=path, document_ids=thread_ids, no_processes=10)
 filter_array = np.logical_and(stat_df.language == 'en',
                               stat_df.replies > 10)
 print(f"{len(filter_array)} is limiting to {sum(filter_array)}")
@@ -38,6 +38,4 @@ with threadpool_limits(limits=1, user_api='blas'):
         for min_df in tqdm([5, 10, 25]):
             nlp.filter_extremes(min_df=min_df, max_df=max_df, keep_n=nlp.keep_n, keep_tokens=nlp.keep_tokens)
             nlp.create_bag_of_words_matrix()
-            nlp.search_best_model(topic_list=[25, 50, 75, 100], passes=2,
-                                  alphas=['asymmetric', 0.01, 0.1, 0.3], etas=['auto', 0.01, 0.1, 0.3, 0.5],
-                                  chunksize=1000, coherence_suffix=1)
+            nlp.search_best_model_mallet(topic_list=[25, 50, 75, 100])
