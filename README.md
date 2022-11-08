@@ -1,3 +1,4 @@
+[![Board Status](https://dev.azure.com/hannesengelhardt0480/a6163d99-dec0-4695-ab67-5f2ee13a4db5/60afe2ae-7fef-4578-a8bc-6f20c2218f7c/_apis/work/boardbadge/a2e359e0-2d31-45fb-a519-a7135399783e)](https://dev.azure.com/hannesengelhardt0480/a6163d99-dec0-4695-ab67-5f2ee13a4db5/_boards/board/t/60afe2ae-7fef-4578-a8bc-6f20c2218f7c/Microsoft.RequirementCategory)
 # Luchan - A Framework for Analyzing Communication according to Niklas Luhmann on 4chan Using Graph Measures and Topic Modelling
 
 This is the repo where I present the code I use during my masters thesis. The goal of the thesis is to research if there are communication structures that are reproducing themselves within similar topics. The theoretical background for this research is given by the assumptions of Niklas Luhmann on communication within social systems.
